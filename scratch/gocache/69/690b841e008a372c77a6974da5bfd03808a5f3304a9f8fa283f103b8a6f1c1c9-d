@@ -1,0 +1,3 @@
+./config.go
+./dashboard_static.go
+./server.go

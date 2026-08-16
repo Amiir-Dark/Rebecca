@@ -1,0 +1,7 @@
+./bot.go
+./client.go
+./format.go
+./handlers.go
+./keyboards.go
+./state.go
+./types.go

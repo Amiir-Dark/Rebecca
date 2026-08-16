@@ -1,0 +1,6 @@
+./backup.go
+./normalize.go
+./reports.go
+./repository.go
+./sender.go
+./types.go

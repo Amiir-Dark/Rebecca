@@ -1,0 +1,4 @@
+./dialect.go
+./doc.go
+./sql_extended.go
+./store.go
