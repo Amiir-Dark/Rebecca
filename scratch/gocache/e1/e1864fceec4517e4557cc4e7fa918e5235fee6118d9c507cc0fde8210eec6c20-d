@@ -1,8 +1,0 @@
-./authenticator.go
-./password.go
-./permissions.go
-./repository.go
-./session.go
-./token.go
-./totp.go
-./types.go
