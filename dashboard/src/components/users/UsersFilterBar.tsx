@@ -220,9 +220,13 @@ export const UsersFilterBar: FC = () => {
 				onClear={clearSearch}
 				borderRadius="full"
 				borderColor="panel.border"
-				bg="panel.elevated"
+				bg="panel.surface"
+				_hover={{
+					borderColor: "panel.borderStrong",
+				}}
 				_focusVisible={{
-					borderColor: "primary.400",
+					borderColor: "var(--rb-panel-accent)",
+					boxShadow: "0 0 16px -2px var(--rb-panel-accent-glow)",
 					bg: "panel.surface",
 				}}
 				rightElement={
@@ -245,22 +249,39 @@ export const UsersFilterBar: FC = () => {
 						<IconButton
 							aria-label={t("filters.advancedButton")}
 							icon={<FilterIcon />}
-							variant="outline"
+							variant="ghost"
 							borderRadius="full"
+							borderWidth="1px"
+							borderColor="panel.border"
+							bg="panel.surface"
 							w="40px"
 							h="40px"
+							transition="all 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
+							_hover={{
+								borderColor: "var(--rb-panel-accent-glow)",
+								bg: "var(--rb-panel-accent-soft)",
+								color: "var(--rb-panel-accent)",
+								transform: "scale(1.04)",
+								boxShadow: "0 0 14px var(--rb-panel-accent-glow)",
+							}}
+							_active={{
+								transform: "scale(0.96)",
+							}}
 						/>
 						{hasClearableFilters && (
 							<Badge
 								className="rb-users-filter-badge"
-								colorScheme="primary"
+								bg="var(--rb-panel-accent)"
+								color="white"
+								boxShadow="0 0 10px var(--rb-panel-accent-glow)"
 								variant="solid"
 								borderRadius="full"
 								position="absolute"
-								top="-4px"
-								insetInlineEnd="-4px"
-								fontSize="0.6rem"
+								top="-3px"
+								insetInlineEnd="-3px"
+								fontSize="0.62rem"
 								px={1.5}
+								py={0.2}
 								pointerEvents="none"
 							>
 								{formatChipCount(activeFilterTotal, locale)}
@@ -268,14 +289,26 @@ export const UsersFilterBar: FC = () => {
 						)}
 					</Box>
 				</PopoverTrigger>
-				<PopoverContent borderColor="light-border" minW="260px">
-					<PopoverArrow />
+				<PopoverContent
+					bg="panel.surface"
+					borderColor="panel.border"
+					borderRadius="18px"
+					boxShadow="inset 0 1px 1px 0 rgba(255, 255, 255, 0.08), 0 20px 50px rgba(0, 0, 0, 0.6)"
+					minW="270px"
+					overflow="hidden"
+				>
+					<PopoverArrow bg="panel.surface" />
 					<PopoverCloseButton />
-					<PopoverHeader fontWeight="semibold">
+					<PopoverHeader
+						fontWeight="bold"
+						borderColor="panel.border"
+						fontSize="sm"
+						py={3}
+					>
 						{t("filters.advancedTitle")}
 					</PopoverHeader>
-					<PopoverBody>
-						<Stack spacing={2}>
+					<PopoverBody py={3}>
+						<Stack spacing={2.5}>
 							{ADVANCED_FILTER_OPTIONS.filter(
 								(option) => option.key !== "top_speed" || canViewTraffic,
 							).map((option) => (
@@ -283,14 +316,15 @@ export const UsersFilterBar: FC = () => {
 									key={option.key}
 									isChecked={activeFilters.includes(option.key)}
 									onChange={() => toggleAdvancedFilter(option.key)}
+									colorScheme="red"
 								>
-									{getFilterLabel(option.key)}
+									<Text fontSize="sm">{getFilterLabel(option.key)}</Text>
 								</Checkbox>
 							))}
 						</Stack>
-						<Stack spacing={3} mt={3}>
+						<Stack spacing={3} mt={4} pt={3} borderTopWidth="1px" borderColor="panel.border">
 							<Box>
-								<Text fontSize="sm" fontWeight="semibold" mb={1}>
+								<Text fontSize="xs" fontWeight="bold" color="panel.textSecondary" mb={1.5}>
 									{t("filters.advanced.serviceLabel")}
 								</Text>
 								<Select
@@ -298,6 +332,7 @@ export const UsersFilterBar: FC = () => {
 									onChange={(event) => handleServiceChange(event.target.value)}
 									portalled={false}
 									size="sm"
+									borderRadius="10px"
 								>
 									<option value="">{t("filters.advanced.serviceAll")}</option>
 									{serviceOptions.map((service) => (
@@ -309,7 +344,7 @@ export const UsersFilterBar: FC = () => {
 							</Box>
 							{hasPrivilegedRole && (
 								<Box>
-									<Text fontSize="sm" fontWeight="semibold" mb={1}>
+									<Text fontSize="xs" fontWeight="bold" color="panel.textSecondary" mb={1.5}>
 										{t("filters.advanced.adminLabel")}
 									</Text>
 									<Select
@@ -317,6 +352,7 @@ export const UsersFilterBar: FC = () => {
 										onChange={(event) => handleAdminChange(event.target.value)}
 										portalled={false}
 										size="sm"
+										borderRadius="10px"
 									>
 										<option value="">{t("filters.advanced.adminAll")}</option>
 										<option value={userData.username}>
@@ -334,8 +370,9 @@ export const UsersFilterBar: FC = () => {
 						<Button
 							variant="ghost"
 							size="sm"
-							mt={3}
+							mt={3.5}
 							w="full"
+							borderRadius="10px"
 							onClick={clearAdvancedFilters}
 							isDisabled={!hasClearableFilters}
 						>
@@ -354,25 +391,47 @@ export const UsersFilterBar: FC = () => {
 						className="rb-users-create-btn"
 						aria-label={t("createUser")}
 						icon={<PlusIconStyled w={5} h={5} />}
-						colorScheme="primary"
+						bg="var(--rb-panel-accent)"
+						color="white"
 						borderRadius="full"
 						w="40px"
 						h="40px"
 						flexShrink={0}
+						boxShadow="0 0 16px -2px var(--rb-panel-accent-glow), inset 0 1px 1px 0 rgba(255, 255, 255, 0.25)"
+						transition="all 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
+						_hover={{
+							bg: "var(--rb-panel-accent-hover)",
+							transform: "scale(1.05)",
+							boxShadow: "0 0 24px var(--rb-panel-accent-glow)",
+						}}
+						_active={{
+							transform: "scale(0.95)",
+						}}
 						onClick={handleCreate}
 					/>
 				) : (
 					<Button
 						className="rb-users-create-btn"
-						colorScheme="primary"
 						leftIcon={<PlusIconStyled />}
+						bg="var(--rb-panel-accent)"
+						color="white"
 						borderRadius="full"
 						h="40px"
 						px={5}
 						fontSize="sm"
-						fontWeight="semibold"
+						fontWeight="bold"
 						whiteSpace="nowrap"
 						flexShrink={0}
+						boxShadow="0 0 16px -2px var(--rb-panel-accent-glow), inset 0 1px 1px 0 rgba(255, 255, 255, 0.25)"
+						transition="all 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
+						_hover={{
+							bg: "var(--rb-panel-accent-hover)",
+							transform: "translateY(-1px)",
+							boxShadow: "0 0 24px var(--rb-panel-accent-glow)",
+						}}
+						_active={{
+							transform: "scale(0.97)",
+						}}
 						onClick={handleCreate}
 					>
 						{t("createUser")}
@@ -380,4 +439,5 @@ export const UsersFilterBar: FC = () => {
 				))}
 		</Flex>
 	);
+
 };

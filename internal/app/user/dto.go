@@ -95,6 +95,7 @@ type UserListItem struct {
 	DataLimitResetStrategy string           `json:"data_limit_reset_strategy,omitempty"`
 	OnlineAt               *string          `json:"online_at"`
 	IsOnline               bool             `json:"is_online"`
+	DeviceLimitType        string           `json:"device_limit_type,omitempty"`
 	ServiceID              *int64           `json:"service_id"`
 	ServiceName            *string          `json:"service_name"`
 	AdminID                *int64           `json:"admin_id"`
@@ -137,6 +138,7 @@ type UserDetail struct {
 	OnHoldExpireDuration   *int64                    `json:"on_hold_expire_duration"`
 	OnHoldTimeout          *string                   `json:"on_hold_timeout"`
 	IPLimit                int64                     `json:"ip_limit"`
+	DeviceLimitType        string                    `json:"device_limit_type"`
 	AutoDeleteInDays       *int64                    `json:"auto_delete_in_days"`
 	Subadress              string                    `json:"subadress,omitempty"`
 	ServiceID              *int64                    `json:"service_id"`
@@ -311,6 +313,14 @@ type SubscriptionSettings struct {
 	ClientRoutingRules             []ClientRoutingRule            `json:"client_routing_rules"`
 	SubscriptionPlaceholderEnabled bool                           `json:"subscription_placeholder_enabled"`
 	SubscriptionPlaceholderRemark  string                         `json:"subscription_placeholder_remark"`
+	SubscriptionAnnouncement       string                         `json:"subscription_announcement"`
+	HappSubInfoColor               string                         `json:"happ_sub_info_color"`
+	HappSubInfoButtonText          string                         `json:"happ_sub_info_button_text"`
+	HappSubInfoButtonLink          string                         `json:"happ_sub_info_button_link"`
+	HappSubExpire                  bool                           `json:"happ_sub_expire"`
+	HappSubExpireButtonLink        string                         `json:"happ_sub_expire_button_link"`
+	HappAnnouncementTargetType     string                         `json:"happ_announcement_target_type"`
+	HappAnnouncementTargetUsers    string                         `json:"happ_announcement_target_users"`
 	SubscriptionPlaceholderPolicy  *SubscriptionPlaceholderPolicy `json:"-"`
 	RawPanelSettings               json.RawMessage                `json:"raw_panel_settings,omitempty"`
 	RawSubscriptionSettings        json.RawMessage                `json:"raw_subscription_settings,omitempty"`

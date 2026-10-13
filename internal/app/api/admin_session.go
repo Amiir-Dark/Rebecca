@@ -173,7 +173,7 @@ UPDATE admin_sessions SET state = ?, otp_attempts = 0, expires_at = ?, last_seen
 }
 
 func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}

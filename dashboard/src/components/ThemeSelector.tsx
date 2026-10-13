@@ -240,6 +240,18 @@ const applyAccent = (accentKey: string) => {
 	const root = document.documentElement;
 	root.style.setProperty("--rb-panel-accent", accent.color);
 	root.style.setProperty("--rb-panel-accent-hover", accent.hover);
+	root.style.setProperty(
+		"--rb-panel-accent-soft",
+		`color-mix(in srgb, ${accent.color} 14%, transparent)`
+	);
+	root.style.setProperty(
+		"--rb-panel-accent-glow",
+		`color-mix(in srgb, ${accent.color} 30%, transparent)`
+	);
+	root.style.setProperty(
+		"--rb-panel-accent-subtle",
+		`color-mix(in srgb, ${accent.color} 8%, transparent)`
+	);
 	Object.entries(generatePalette(accent.color)).forEach(([key, value]) => {
 		root.style.setProperty(key, value);
 	});

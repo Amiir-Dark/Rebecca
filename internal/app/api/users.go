@@ -143,6 +143,18 @@ func (s *Server) handleUserPath(w http.ResponseWriter, r *http.Request) {
 			s.handleUserIPs(w, r, username)
 			return
 		}
+		if suffix == "hwids" {
+			if r.Method == http.MethodGet {
+				s.handleUserHWIDsGet(w, r, username)
+				return
+			}
+			if r.Method == http.MethodDelete || r.Method == http.MethodPost {
+				s.handleUserHWIDsReset(w, r, username)
+				return
+			}
+			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
 		s.handleUserMutationAction(w, r, username, suffix)
 		return
 	}
@@ -290,6 +302,73 @@ func (s *Server) handleUserIPs(w http.ResponseWriter, r *http.Request, username 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"username": result.Username,
 		"ips":      records,
+	})
+}
+
+func (s *Server) handleUserHWIDsGet(w http.ResponseWriter, r *http.Request, username string) {
+	principal, ok := r.Context().Value(adminContextKey).(adminPrincipal)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "missing admin context")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	result, err := s.userService.UserGet(ctx, userapp.UserGetRequest{
+		Username:      username,
+		RequestOrigin: requestOrigin(r),
+		Admin:         s.userAdminContext(principal, nil),
+	})
+	if err != nil {
+		writeUserReadError(w, err)
+		return
+	}
+	onlineRecords, onlineErr := s.nodeController.UserOnlineIPs(ctx, result.ID)
+	if onlineErr == nil && len(onlineRecords) == 0 {
+		_ = s.userService.ResetUserHWIDs(ctx, result.ID)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"username": result.Username,
+			"hwids":    []userapp.UserHWIDRecord{},
+		})
+		return
+	}
+
+	hwids, err := s.userService.GetUserHWIDs(ctx, result.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"username": result.Username,
+		"hwids":    hwids,
+	})
+}
+
+func (s *Server) handleUserHWIDsReset(w http.ResponseWriter, r *http.Request, username string) {
+	principal, ok := r.Context().Value(adminContextKey).(adminPrincipal)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "missing admin context")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	result, err := s.userService.UserGet(ctx, userapp.UserGetRequest{
+		Username:      username,
+		RequestOrigin: requestOrigin(r),
+		Admin:         s.userAdminContext(principal, nil),
+	})
+	if err != nil {
+		writeUserReadError(w, err)
+		return
+	}
+	if err := s.userService.ResetUserHWIDs(ctx, result.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"username": result.Username,
+		"message":  "HWIDs cleared successfully",
 	})
 }
 

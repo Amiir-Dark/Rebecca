@@ -48,6 +48,7 @@ const getApiProxyConfig = (baseAPI?: string) => {
 				target,
 				changeOrigin: true,
 				secure: true,
+				xfwd: true,
 				rewrite,
 			},
 		};

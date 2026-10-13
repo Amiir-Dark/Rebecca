@@ -112,8 +112,8 @@ INSERT INTO users (
 	username, credential_key, subscription_token, flow, status, used_traffic, data_limit,
 	data_limit_reset_strategy, expire, admin_id, created_at, note, telegram_id,
 	contact_number, on_hold_expire_duration, on_hold_timeout, ip_limit,
-	auto_delete_in_days, last_status_change, service_id
-) VALUES (?, ?, '', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	device_limit_type, auto_delete_in_days, last_status_change, service_id
+) VALUES (?, ?, '', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		payload.Username,
 		nullableStringValue(credentialKey),
 		nullableStringPtr(payload.Flow),
@@ -129,6 +129,7 @@ INSERT INTO users (
 		nilIfZero(payload.OnHoldExpireDuration),
 		nullableStringPtr(payload.OnHoldTimeout),
 		int64OrZero(payload.IPLimit),
+		sanitizeDeviceLimitType(payload.DeviceLimitType),
 		nilIfZero(payload.AutoDeleteInDays),
 		dbTime(now),
 		nullableInt64Ptr(serviceID),
@@ -322,6 +323,10 @@ func (r Repository) updateUserMutation(ctx context.Context, admin adminapp.Admin
 	if rawFieldPresent(rawFields, "ip_limit") {
 		sets = append(sets, "ip_limit = ?")
 		args = append(args, int64OrZero(payload.IPLimit))
+	}
+	if rawFieldPresent(rawFields, "device_limit_type") {
+		sets = append(sets, "device_limit_type = ?")
+		args = append(args, sanitizeDeviceLimitType(payload.DeviceLimitType))
 	}
 	if rawFieldPresent(rawFields, "on_hold_timeout") {
 		sets = append(sets, "on_hold_timeout = ?")
@@ -596,4 +601,15 @@ func (r Repository) activeNextMutation(ctx context.Context, admin adminapp.Admin
 		return MutationResult{}, err
 	}
 	return MutationResult{UserID: existing.ID, Username: existing.Username, Status: string(UserStatusActive)}, nil
+}
+
+func sanitizeDeviceLimitType(val *string) string {
+	if val == nil {
+		return "ip"
+	}
+	t := strings.ToLower(strings.TrimSpace(*val))
+	if t == "hwid" || t == "hardware" {
+		return "hwid"
+	}
+	return "ip"
 }

@@ -99,7 +99,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) registerAdminRoutes(r chi.Router) {
 	r.HandleFunc("/auth/login", s.requireSameOrigin(s.handleAuthLogin))
 	r.HandleFunc("/auth/session", s.handleAuthSession)
-	r.HandleFunc("/auth/logout", s.requireSameOrigin(s.handleAuthLogout))
+	r.HandleFunc("/auth/logout", s.handleAuthLogout)
 	r.HandleFunc("/auth/2fa/verify", s.requireSameOrigin(s.handleAuthVerify2FA))
 	r.HandleFunc("/auth/2fa/setup", s.requireSameOrigin(s.handleAuth2FA))
 	r.HandleFunc("/auth/2fa/confirm", s.requireSameOrigin(s.handleAuth2FA))

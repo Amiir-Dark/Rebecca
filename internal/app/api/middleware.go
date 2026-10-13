@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -119,6 +120,9 @@ func requestOriginAllowed(r *http.Request) bool {
 	sameOriginFetch := strings.EqualFold(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")), "same-origin")
 	for _, host := range []string{r.Host, forwardedHost} {
 		host = strings.TrimSpace(host)
+		if host == "" {
+			continue
+		}
 		if strings.EqualFold(parsed.Host, host) {
 			return true
 		}
@@ -129,7 +133,26 @@ func requestOriginAllowed(r *http.Request) bool {
 			return true
 		}
 	}
+	// Allow loopback origins when accessing a loopback host (local development/testing).
+	if isLoopbackHost(parsed.Hostname()) && (isLoopbackHost(r.Host) || (forwardedHost != "" && isLoopbackHost(forwardedHost))) {
+		return true
+	}
 	return false
+}
+
+func isLoopbackHost(host string) bool {
+	h := host
+	if strings.Contains(h, ":") {
+		if parsedH, _, err := net.SplitHostPort(h); err == nil {
+			h = parsedH
+		}
+	}
+	h = strings.Trim(h, "[]")
+	if strings.EqualFold(h, "localhost") || strings.EqualFold(h, "127.0.0.1") || h == "::1" {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
 }
 
 func sudoScopeAllowed(scopes adminapp.SudoPermissionSettings, path string) bool {

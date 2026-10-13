@@ -22,6 +22,7 @@ import {
 	useToast,
 } from "@chakra-ui/react";
 import dayjs from "dayjs";
+import { HappAnnouncementPanel } from "components/notifications/HappAnnouncementPanel";
 import { PageHeader } from "components/ui";
 import useGetUser from "hooks/useGetUser";
 import { useState } from "react";
@@ -428,6 +429,7 @@ export default function NotificationsPage() {
 					<Tab>{t("notifications.tabs.inbox")}</Tab>
 					{canSend && <Tab>{t("notifications.tabs.send")}</Tab>}
 					{isFullAccess && <Tab>{t("notifications.tabs.rules")}</Tab>}
+					{canSend && <Tab>{t("notifications.tabs.happAnnouncement")}</Tab>}
 				</TabList>
 				<TabPanels>
 					<TabPanel px={0}>
@@ -441,6 +443,11 @@ export default function NotificationsPage() {
 					{isFullAccess && (
 						<TabPanel px={0}>
 							<RulesPanel />
+						</TabPanel>
+					)}
+					{canSend && (
+						<TabPanel px={0}>
+							<HappAnnouncementPanel />
 						</TabPanel>
 					)}
 				</TabPanels>

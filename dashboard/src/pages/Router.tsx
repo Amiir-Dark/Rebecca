@@ -119,10 +119,8 @@ const routeSegments = new Set([
 	"admins",
 	"myaccount",
 	"usage",
-	"tutorials",
 	"services",
 	"hosts",
-	"haproxy",
 	"node-settings",
 	"integrations",
 	"settings",
@@ -131,9 +129,7 @@ const routeSegments = new Set([
 	"errors",
 	"notifications",
 	"access-insights",
-	"api-docs",
 	"phpmyadmin",
-	"external-apps",
 	"recent-actions",
 	"placeholders",
 ]);
@@ -218,7 +214,7 @@ export const router = createBrowserRouter(
 				},
 				{
 					path: "bulk-actions",
-					element: <LazyPage Page={BulkActionsPage} />,
+					element: <Navigate to="/users" replace />,
 				},
 				{
 					path: "admins",
@@ -234,7 +230,7 @@ export const router = createBrowserRouter(
 				},
 				{
 					path: "tutorials",
-					element: <LazyPage Page={TutorialsPage} />,
+					element: <Navigate to="/settings" replace />,
 				},
 				{
 					path: "services",
@@ -246,7 +242,7 @@ export const router = createBrowserRouter(
 				},
 				{
 					path: "haproxy",
-					element: <LazyPage Page={HAProxyPage} />,
+					element: <Navigate to="/settings" replace />,
 				},
 				{
 					path: "node-settings",
@@ -290,7 +286,7 @@ export const router = createBrowserRouter(
 				},
 				{
 					path: "api-docs",
-					element: <LazyPage Page={ApiDocsPage} />,
+					element: <Navigate to="/settings" replace />,
 				},
 				{
 					path: "phpmyadmin",
@@ -298,7 +294,7 @@ export const router = createBrowserRouter(
 				},
 				{
 					path: "external-apps",
-					element: <LazyPage Page={ExternalAppsPage} />,
+					element: <Navigate to="/settings" replace />,
 				},
 			],
 		},

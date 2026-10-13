@@ -1,4 +1,5 @@
 import {
+	Badge,
 	Box,
 	type BoxProps,
 	Button,
@@ -13,6 +14,11 @@ import {
 	Portal,
 	Spinner,
 	Stack,
+	Tab,
+	TabList,
+	TabPanel,
+	TabPanels,
+	Tabs,
 	Text,
 	Tooltip,
 	useBreakpointValue,
@@ -55,8 +61,9 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { fetch } from "service/http";
+import { getUserHWIDs, resetUserHWIDs } from "service/settings";
 import { AdminRole, AdminStatus, UserPermissionToggle } from "types/Admin";
-import type { User, UserListItem } from "types/User";
+import type { User, UserListItem, UserHWID } from "types/User";
 import {
 	canDeleteUserByTrafficCap,
 	canViewUserTraffic,
@@ -188,6 +195,7 @@ const UsageHistoryIcon = chakra(ChartBarIcon, iconProps);
 const DataLimitIcon = chakra(CircleStackIcon, iconProps);
 const ExpiryIcon = chakra(CalendarDaysIcon, iconProps);
 const IPsIcon = chakra(GlobeAltIcon, iconProps);
+const ConnectionsIcon = chakra(SignalIcon, iconProps);
 
 type UserIPRecord = {
 	node_id: number;
@@ -590,8 +598,12 @@ export const UsersTable: FC<UsersTableProps> = ({
 	const [isBulkResetOpen, setIsBulkResetOpen] = useState(false);
 	const [ipDialog, setIPDialog] = useState<{
 		username: string;
+		user?: UserListItem;
 		records: UserIPRecord[];
+		hwids: UserHWID[];
+		loading?: boolean;
 		error?: string;
+		resettingHwids?: boolean;
 	} | null>(null);
 
 	const visibleUsernames = useMemo(
@@ -784,18 +796,35 @@ export const UsersTable: FC<UsersTableProps> = ({
 
 	const handleGetIPs = async (user: UserListItem) => {
 		setContextAction("ips");
-		setIPDialog({ username: user.username, records: [] });
+		setIPDialog({
+			username: user.username,
+			user,
+			records: [],
+			hwids: [],
+			loading: true,
+		});
 		closeContextMenu();
 		try {
-			const response = await fetch<UserIPsResponse>(
-				`/user/${encodeURIComponent(user.username)}/ips`,
-			);
+			const [ipsRes, hwidsRes] = await Promise.allSettled([
+				fetch<UserIPsResponse>(
+					`/user/${encodeURIComponent(user.username)}/ips`,
+				),
+				getUserHWIDs(user.username),
+			]);
+			const records =
+				ipsRes.status === "fulfilled"
+					? deduplicateUserIPRecords(ipsRes.value.ips || [])
+					: [];
+			const hwids =
+				hwidsRes.status === "fulfilled" ? hwidsRes.value.hwids || [] : [];
+			const error =
+				ipsRes.status === "rejected" && hwidsRes.status === "rejected"
+					? t("usersTable.getIpsFailed")
+					: undefined;
+
 			setIPDialog((current) =>
 				current?.username === user.username
-					? {
-							username: user.username,
-							records: deduplicateUserIPRecords(response.ips || []),
-						}
+					? { ...current, records, hwids, loading: false, error }
 					: current,
 			);
 		} catch (error: any) {
@@ -803,11 +832,53 @@ export const UsersTable: FC<UsersTableProps> = ({
 				error?.data?.detail || error?.message || t("usersTable.getIpsFailed");
 			setIPDialog((current) =>
 				current?.username === user.username
-					? { ...current, error: message }
+					? { ...current, loading: false, error: message }
 					: current,
 			);
 		} finally {
 			setContextAction(null);
+		}
+	};
+
+	const handleRefreshConnections = async () => {
+		if (!ipDialog?.username) return;
+		setIPDialog((prev) => (prev ? { ...prev, loading: true } : null));
+		try {
+			const [ipsRes, hwidsRes] = await Promise.allSettled([
+				fetch<UserIPsResponse>(
+					`/user/${encodeURIComponent(ipDialog.username)}/ips`,
+				),
+				getUserHWIDs(ipDialog.username),
+			]);
+			const records =
+				ipsRes.status === "fulfilled"
+					? deduplicateUserIPRecords(ipsRes.value.ips || [])
+					: [];
+			const hwids =
+				hwidsRes.status === "fulfilled" ? hwidsRes.value.hwids || [] : [];
+			setIPDialog((prev) =>
+				prev ? { ...prev, records, hwids, loading: false } : null,
+			);
+		} catch {
+			setIPDialog((prev) => (prev ? { ...prev, loading: false } : null));
+		}
+	};
+
+	const handleResetDialogHWIDs = async () => {
+		if (!ipDialog?.username) return;
+		setIPDialog((prev) => (prev ? { ...prev, resettingHwids: true } : null));
+		try {
+			await resetUserHWIDs(ipDialog.username);
+			notify(t("userDialog.hwidResetSuccess"), "success");
+			const hwidsRes = await getUserHWIDs(ipDialog.username);
+			setIPDialog((prev) =>
+				prev
+					? { ...prev, hwids: hwidsRes.hwids || [], resettingHwids: false }
+					: null,
+			);
+		} catch {
+			notify(t("userDialog.hwidResetError"), "error");
+			setIPDialog((prev) => (prev ? { ...prev, resettingHwids: false } : null));
 		}
 	};
 
@@ -982,15 +1053,6 @@ export const UsersTable: FC<UsersTableProps> = ({
 							</Text>
 						</HStack>
 						<UserAdminChip adminUsername={user.admin_username} />
-						<Text
-							className="rb-user-card-status"
-							fontSize="xs"
-							fontWeight="semibold"
-							color={USER_STATUS_TEXT_COLORS[user.status] ?? "panel.text"}
-							textTransform="capitalize"
-						>
-							{t(`status.${user.status}`)}
-						</Text>
 					</Stack>
 				),
 			},
@@ -1004,6 +1066,7 @@ export const UsersTable: FC<UsersTableProps> = ({
 				maxWidth: "120px",
 				cellAlign: "start",
 				mobileVisible: false,
+				desktopVisible: false,
 				cell: (user) => (
 					<Text fontSize="sm" color="panel.text" dir="ltr" fontFamily="mono">
 						{user.id}
@@ -1094,6 +1157,7 @@ export const UsersTable: FC<UsersTableProps> = ({
 				headerAlign: "start",
 				cellAlign: "start",
 				mobileVisible: true,
+				desktopVisible: false,
 				mobilePriority: 5,
 				mobileMetaLabel: t("usersTable.speed"),
 				cell: (user) => <UserSpeed user={user} />,
@@ -1108,6 +1172,7 @@ export const UsersTable: FC<UsersTableProps> = ({
 				headerAlign: "start",
 				cellAlign: "start",
 				mobileVisible: true,
+				desktopVisible: false,
 				mobilePriority: 6,
 				mobileMetaLabel: t("usersTable.remainingTraffic"),
 				cell: (user) => (
@@ -1135,12 +1200,14 @@ export const UsersTable: FC<UsersTableProps> = ({
 				headerAlign: "start",
 				cellAlign: "start",
 				mobileVisible: true,
+				desktopVisible: false,
 				mobilePriority: 7,
 				mobileMetaLabel: t("usersTable.lifetimeUsage"),
 				cell: (user) => (
 					<MobileLifetimeDetail totalUsedTraffic={user.lifetime_used_traffic} />
 				),
 			});
+
 		}
 
 		columns.push({
@@ -1263,13 +1330,6 @@ export const UsersTable: FC<UsersTableProps> = ({
 					setSubLink(subscriptionLink);
 				},
 			},
-			{
-				id: "get-ips",
-				label: t("usersTable.getIps"),
-				icon: <IPsIcon />,
-				isDisabled: contextAction === "ips",
-				onClick: () => handleGetIPs(user),
-			},
 		];
 
 		if (canOpenUserDialog && !rowManagementLocked) {
@@ -1281,15 +1341,12 @@ export const UsersTable: FC<UsersTableProps> = ({
 			});
 		}
 
-		// Reuses the edit dialog's existing Usage tab (chart + /user/{u}/usage).
-		if (canViewTraffic) {
-			actions.push({
-				id: "usage-history",
-				label: t("usersTable.usageHistory"),
-				icon: <UsageHistoryIcon />,
-				onClick: () => onEditingUser(user, 1),
-			});
-		}
+		actions.push({
+			id: "connections",
+			label: t("usersTable.connectionsAndDevices"),
+			icon: <ConnectionsIcon />,
+			onClick: () => handleGetIPs(user),
+		});
 
 		if (
 			canToggleUserStatus &&
@@ -1326,80 +1383,6 @@ export const UsersTable: FC<UsersTableProps> = ({
 				icon: <ResetIcon />,
 				isDisabled: contextAction === "reset",
 				onClick: () => handleResetUsage(user),
-			});
-		}
-
-		if (canRevokeSubActions && !rowManagementLocked) {
-			actions.push({
-				id: "revoke",
-				label: t("usersTable.revokeSub"),
-				icon: <RevokeIcon />,
-				isDisabled: contextAction === "revoke",
-				onClick: () => handleRevokeSub(user),
-			});
-		}
-
-		if (canMutateRow && user.data_limit !== null && user.data_limit !== 0) {
-			actions.push({
-				id: "add-traffic",
-				label: t("services.userActions.traffic.add"),
-				icon: <TrafficIcon />,
-				render: (_row, onClose) => (
-					<TrafficSubmenu
-						label={t("services.userActions.traffic.add")}
-						isRTL={isRTL}
-						activeAction={contextAction}
-						onClose={onClose}
-						onSelect={(gigabytes) => handleAdjustTraffic(user, gigabytes)}
-						getOptionLabel={(gigabytes) =>
-							t("usersTable.addGb", {
-								count: gigabytes,
-							})
-						}
-					/>
-				),
-			});
-		}
-
-		// Absolute data-limit editor (PUT data_limit) — complements the
-		// relative "Add traffic" action above.
-		if (canMutateRow) {
-			actions.push({
-				id: "set-data-limit",
-				label: t("usersTable.setDataLimit"),
-				icon: <DataLimitIcon />,
-				onClick: () =>
-					useDashboard.setState({
-						quickEditUser: { user, field: "data_limit" },
-					}),
-			});
-		}
-
-		if (
-			canMutateRow &&
-			user.expire !== null &&
-			user.expire !== 0 &&
-			user.expire !== undefined
-		) {
-			actions.push({
-				id: "extend-expire",
-				label: t("usersTable.add30Days"),
-				icon: <ExtendIcon />,
-				isDisabled: contextAction === "expire",
-				onClick: () => handleExtendExpire(user, 30),
-			});
-		}
-
-		// Absolute expiry editor (PUT expire) — complements "Add 30 days".
-		if (canMutateRow) {
-			actions.push({
-				id: "set-expiry",
-				label: t("usersTable.setExpiry"),
-				icon: <ExpiryIcon />,
-				onClick: () =>
-					useDashboard.setState({
-						quickEditUser: { user, field: "expire" },
-					}),
 			});
 		}
 
@@ -1584,14 +1567,24 @@ export const UsersTable: FC<UsersTableProps> = ({
 			pb={selectedUsers.length > 0 ? { base: 32, md: 24 } : 0}
 			{...props}
 		>
-			{/* One unified header card: stats on top, search + quick filters below. */}
-			<ResourceListCard
-				title={t("usersTable.listHeader")}
-				summaryItems={summaryItems}
-				actions={headerActions}
+			{/* Single-row clean toolbar without duplicate summary pills */}
+			<Flex
+				align="center"
+				justify="space-between"
+				gap={3}
+				w="full"
+				flexWrap="wrap"
+				mb={1}
 			>
-				{toolbar}
-			</ResourceListCard>
+				<Box flex="1 1 auto" minW={{ base: "100%", md: "360px" }}>
+					{toolbar}
+				</Box>
+				{headerActions && (
+					<Box flexShrink={0}>
+						{headerActions}
+					</Box>
+				)}
+			</Flex>
 
 			<Box position="relative">
 				<Stack
@@ -1615,11 +1608,6 @@ export const UsersTable: FC<UsersTableProps> = ({
 								}
 							/>
 						}
-						enableSelection
-						selectedRowIds={selectedUsernames}
-						selectedRows={selectedUsers}
-						selectedCount={selectedUsers.length}
-						onSelectionChange={(rowIds) => setSelectedUsernames(rowIds)}
 						rowActions={getUserRowActions}
 						renderRowActions={(user) => (
 							<ActionButtons
@@ -1662,107 +1650,8 @@ export const UsersTable: FC<UsersTableProps> = ({
 						onSortingChange={handleUserTableSorting}
 						manualSorting
 						dir={isRTL ? "rtl" : "ltr"}
-						selectedLabel={t("usersTable.selectedCount", {
-							count: selectedUsers.length,
-						})}
-						renderBulkActions={() => (
-							<>
-								{canToggleUserStatus && (
-									<Button
-										size="sm"
-										variant="outline"
-										leftIcon={<RevokeIcon />}
-										onClick={handleBulkDisable}
-										isLoading={bulkAction === "disable"}
-										isDisabled={
-											Boolean(bulkAction) ||
-											selectedUsersManagementLocked ||
-											bulkDisableTargets.length === 0
-										}
-									>
-										{t("usersTable.disableUser")}
-									</Button>
-								)}
-								{canToggleUserStatus && (
-									<Button
-										size="sm"
-										variant="outline"
-										leftIcon={<CheckIcon width={16} />}
-										onClick={handleBulkEnable}
-										isLoading={bulkAction === "enable"}
-										isDisabled={
-											Boolean(bulkAction) ||
-											selectedUsersManagementLocked ||
-											bulkEnableTargets.length === 0
-										}
-									>
-										{t("usersTable.enableUser")}
-									</Button>
-								)}
-								{canResetUsageActions && (
-									<Button
-										size="sm"
-										variant="outline"
-										leftIcon={<ResetIcon />}
-										onClick={() => setIsBulkResetOpen(true)}
-										isLoading={bulkAction === "reset"}
-										isDisabled={
-											Boolean(bulkAction) ||
-											selectedUsersManagementLocked ||
-											selectedUsers.length === 0
-										}
-									>
-										{t("usersTable.resetUsage")}
-									</Button>
-								)}
-								{canRevokeSubActions && (
-									<Button
-										size="sm"
-										variant="outline"
-										leftIcon={<RevokeIcon />}
-										onClick={handleBulkRevoke}
-										isLoading={bulkAction === "revoke"}
-										isDisabled={
-											Boolean(bulkAction) ||
-											selectedUsersManagementLocked ||
-											selectedUsers.length === 0
-										}
-									>
-										{t("usersTable.revokeSub")}
-									</Button>
-								)}
-								{canDeleteUserActions && (
-									<DeleteConfirmDialog
-										description={t("usersTable.bulkDeletePrompt")}
-										onConfirm={handleBulkDelete}
-									>
-										<Button
-											size="sm"
-											colorScheme="red"
-											variant="outline"
-											leftIcon={<DeleteIcon />}
-											isLoading={bulkAction === "delete"}
-											isDisabled={
-												Boolean(bulkAction) || bulkDeleteTargets.length === 0
-											}
-										>
-											{t("delete")}
-										</Button>
-									</DeleteConfirmDialog>
-								)}
-							</>
-						)}
-						tableProps={{
-							w: "full",
-							sx: {
-								"& th, & td": {
-									px: { base: 2, xl: 3 },
-									py: { base: 2.5, xl: 2.5 },
-									verticalAlign: "middle",
-								},
-							},
-						}}
 					/>
+
 				</Stack>
 				{isAdminDisabled && (
 					<Flex
@@ -1791,7 +1680,7 @@ export const UsersTable: FC<UsersTableProps> = ({
 			<AppDialog
 				isOpen={ipDialog !== null}
 				onClose={() => setIPDialog(null)}
-				title={t("usersTable.ipsDialogTitle")}
+				title={t("usersTable.connectionsDialogTitle")}
 				isCentered
 				size="lg"
 				scrollBehavior="inside"
@@ -1804,209 +1693,386 @@ export const UsersTable: FC<UsersTableProps> = ({
 				}}
 				bodyProps={{ pb: 5 }}
 				footer={
-					<HStack w="full" justify="flex-end" spacing={2}>
-						<Button size="sm" onClick={() => setIPDialog(null)}>
-							{t("close")}
-						</Button>
+					<HStack w="full" justify="space-between">
 						<Button
 							size="sm"
-							colorScheme="primary"
-							leftIcon={<CopyIcon />}
-							onClick={handleCopyIPs}
-							isDisabled={
-								contextAction === "ips" ||
-								Boolean(ipDialog?.error) ||
-								!ipDialog?.records.length
-							}
+							variant="outline"
+							leftIcon={<ArrowPathIcon width={14} />}
+							onClick={handleRefreshConnections}
+							isLoading={ipDialog?.loading}
 						>
-							{t("usersTable.copyIps")}
+							{t("usersTable.refreshConnections")}
 						</Button>
+						<HStack spacing={2}>
+							<Button size="sm" onClick={() => setIPDialog(null)}>
+								{t("close")}
+							</Button>
+							<Button
+								size="sm"
+								colorScheme="primary"
+								leftIcon={<CopyIcon />}
+								onClick={handleCopyIPs}
+								isDisabled={
+									Boolean(ipDialog?.error) ||
+									!ipDialog?.records.length
+								}
+							>
+								{t("usersTable.copyIps")}
+							</Button>
+						</HStack>
 					</HStack>
 				}
 			>
 				<Stack spacing={4}>
-					<Box>
-						<HStack justify="space-between" align="baseline" spacing={3}>
-							<Text fontWeight="700" dir="ltr" noOfLines={1}>
-								{ipDialog?.username}
-							</Text>
-							{contextAction !== "ips" && !ipDialog?.error && (
-								<Text fontSize="xs" color="panel.textMuted" flexShrink={0}>
-									{t("usersTable.ipsDialogCount", {
-										count: ipDialog?.records.length ?? 0,
-									})}
+					<Flex justify="space-between" align="center" flexWrap="wrap" gap={2}>
+						<VStack align="start" spacing={0.5}>
+							<HStack spacing={2} align="center">
+								<Text fontWeight="700" fontSize="md" dir="ltr">
+									{ipDialog?.username}
 								</Text>
-							)}
-						</HStack>
-						<Text mt={1} fontSize="sm" color="panel.textMuted">
-							{t("usersTable.ipsDialogDescription")}
-						</Text>
-					</Box>
-
-					{contextAction === "ips" ? (
-						<Flex align="center" justify="center" gap={3} py={8}>
-							<Spinner size="sm" color="panel.accent" />
-							<Text fontSize="sm" color="panel.textMuted">
-								{t("usersTable.ipsDialogLoading")}
+								{ipDialog?.user && (
+									<Badge
+										colorScheme={ipDialog.user.status === "active" ? "green" : "gray"}
+										fontSize="xs"
+										textTransform="capitalize"
+									>
+										{t(`status.${ipDialog.user.status}`)}
+									</Badge>
+								)}
+							</HStack>
+							<Text fontSize="xs" color="panel.textMuted">
+								{t("usersTable.ipsDialogDescription")}
 							</Text>
-						</Flex>
-					) : ipDialog?.error ? (
-						<Box
-							role="alert"
-							borderWidth="1px"
-							borderColor="red.400"
-							borderRadius="md"
-							bg="red.50"
-							color="red.700"
-							_dark={{ bg: "rgba(127, 29, 29, 0.22)", color: "red.200" }}
-							px={3}
-							py={2.5}
-							fontSize="sm"
-						>
-							{ipDialog.error}
-						</Box>
-					) : !ipDialog?.records.length ? (
-						<Box
-							borderWidth="1px"
-							borderColor="panel.border"
-							borderRadius="md"
-							px={4}
-							py={8}
-							textAlign="center"
-						>
-							<Text fontSize="sm" color="panel.textMuted">
-								{t("usersTable.ipsDialogEmpty")}
-							</Text>
-						</Box>
-					) : (
-						<Stack spacing={3}>
-							{ipDialog.records.map((record, index) => {
-								const nodes = uniqueIPValues([
-									...(record.node_names || []),
-									record.node_name || `node-${record.node_id}`,
-								]);
-								const protocols = uniqueIPValues([
-									...(record.protocols || []),
-									record.protocol,
-								]);
-								const inbounds = uniqueIPValues([
-									...(record.inbound_tags || []),
-									record.inbound_tag,
-								]);
-								const ip = record.ip || record.assigned_ip || "-";
-								const metadata = [
-									protocols.join(", "),
-									inbounds.join(", "),
-									nodes.join(", "),
-								]
-									.filter(Boolean)
-									.join(" · ");
-								const assignedIPs = uniqueIPValues([
-									...(record.assigned_ips || []),
-									record.assigned_ip,
-								]).filter((value) => value !== ip);
-								const connections = Math.max(record.connections || 1, 1);
+						</VStack>
 
-								return (
+						{ipDialog?.user && (
+							<HStack spacing={2}>
+								<Badge
+									colorScheme={ipDialog.user.device_limit_type === "hwid" ? "purple" : "blue"}
+									variant="subtle"
+									fontSize="xs"
+									px={2}
+									py={0.5}
+									borderRadius="md"
+								>
+									{ipDialog.user.device_limit_type === "hwid"
+										? `${t("userDialog.limitTypeHWID")}: ${ipDialog.user.ip_limit ? ipDialog.user.ip_limit + " " + t("userDialog.deviceUnit") : t("userDialog.remainingDataUnlimited")}`
+										: `${t("userDialog.limitTypeIP")}: ${ipDialog.user.ip_limit ? ipDialog.user.ip_limit + " " + t("userDialog.ipUnit") : t("userDialog.remainingDataUnlimited")}`}
+								</Badge>
+							</HStack>
+						)}
+					</Flex>
+
+					<Tabs isFitted variant="line" colorScheme="primary">
+						<TabList mb={2}>
+							<Tab fontSize="sm">
+								<HStack spacing={2}>
+									<GlobeAltIcon width={16} />
+									<Text>{t("usersTable.tabLiveIps")}</Text>
+									<Badge
+										colorScheme={ipDialog?.records.length ? "green" : "gray"}
+										borderRadius="full"
+										fontSize="2xs"
+										px={2}
+									>
+										{ipDialog?.records.length ?? 0}
+									</Badge>
+								</HStack>
+							</Tab>
+							<Tab fontSize="sm">
+								<HStack spacing={2}>
+									<SignalIcon width={16} />
+									<Text>{t("usersTable.tabHardware")}</Text>
+									<Badge
+										colorScheme={ipDialog?.hwids.length ? "purple" : "gray"}
+										borderRadius="full"
+										fontSize="2xs"
+										px={2}
+									>
+										{ipDialog?.hwids.length ?? 0}
+									</Badge>
+								</HStack>
+							</Tab>
+						</TabList>
+
+						<TabPanels>
+							{/* Panel 1: Live Connecting IPs */}
+							<TabPanel px={0} py={2}>
+								{ipDialog?.loading ? (
+									<Flex align="center" justify="center" gap={3} py={8}>
+										<Spinner size="sm" color="panel.accent" />
+										<Text fontSize="sm" color="panel.textMuted">
+											{t("usersTable.ipsDialogLoading")}
+										</Text>
+									</Flex>
+								) : ipDialog?.error ? (
 									<Box
-										as="article"
-										key={ip === "-" ? `${metadata}-${index}` : ip}
-										p={3}
+										role="alert"
+										borderWidth="1px"
+										borderColor="red.400"
+										borderRadius="md"
+										bg="red.50"
+										color="red.700"
+										_dark={{ bg: "rgba(127, 29, 29, 0.22)", color: "red.200" }}
+										px={3}
+										py={2.5}
+										fontSize="sm"
+									>
+										{ipDialog.error}
+									</Box>
+								) : !ipDialog?.records.length ? (
+									<Box
 										borderWidth="1px"
 										borderColor="panel.border"
-										borderRadius="6px"
+										borderRadius="md"
+										px={4}
+										py={8}
+										textAlign="center"
 									>
-										<Flex
-											justify="space-between"
-											direction={{ base: "column", sm: "row" }}
-											align={{ base: "stretch", sm: "flex-start" }}
-											gap={3}
-										>
-											<OperatorIdentity
-												shortName={record.operator_short_name}
-												owner={record.operator_owner}
-											/>
-											<Box minW={0} textAlign={{ base: "start", sm: "end" }}>
-												<Text
-													dir="ltr"
-													fontFamily="mono"
-													fontWeight="700"
-													fontSize="sm"
-													overflowWrap="anywhere"
-												>
-													{ip}
-												</Text>
-												<HStack
-													mt={0.5}
-													spacing={1}
-													justify={{ base: "flex-start", sm: "flex-end" }}
-													color="panel.textSecondary"
-													fontSize="xs"
-												>
-													<SignalIcon width={14} aria-hidden="true" />
-													<Text>
-														{t("usersTable.ipConnections_other", {
-															count: connections,
-														})}
-													</Text>
-												</HStack>
-											</Box>
-										</Flex>
-
-										<HStack
-											mt={3}
-											spacing={3}
-											flexWrap="wrap"
-											color="panel.textMuted"
-											fontSize="xs"
-										>
-											{protocols.length > 0 && (
-												<HStack spacing={1}>
-													<GlobeAltIcon width={14} aria-hidden="true" />
-													<Text>{protocols.join(", ")}</Text>
-												</HStack>
-											)}
-											{inbounds.length > 0 && (
-												<HStack spacing={1}>
-													<LinkIcon width={14} aria-hidden="true" />
-													<Text>{inbounds.join(", ")}</Text>
-												</HStack>
-											)}
-											{nodes.length > 0 && (
-												<HStack spacing={1}>
-													<ServerStackIcon width={14} aria-hidden="true" />
-													<Text>{nodes.join(", ")}</Text>
-												</HStack>
-											)}
-											{record.last_seen_at && (
-												<HStack spacing={1}>
-													<ClockIcon width={14} aria-hidden="true" />
-													<Text dir="ltr">
-														{dayjs(record.last_seen_at).format(
-															"YYYY-MM-DD HH:mm",
-														)}
-													</Text>
-												</HStack>
-											)}
-										</HStack>
-										{assignedIPs.length > 0 && (
-											<Text
-												mt={1}
-												fontSize="xs"
-												color="panel.textSecondary"
-												overflowWrap="anywhere"
-											>
-												{t("usersTable.assignedIp")}:{" "}
-												<chakra.span dir="ltr" display="inline-block">
-													{assignedIPs.join(", ")}
-												</chakra.span>
-											</Text>
-										)}
+										<Text fontSize="sm" color="panel.textMuted">
+											{t("usersTable.ipsDialogEmpty")}
+										</Text>
 									</Box>
-								);
-							})}
-						</Stack>
-					)}
+								) : (
+									<Stack spacing={3}>
+										{ipDialog.records.map((record, index) => {
+											const nodes = uniqueIPValues([
+												...(record.node_names || []),
+												record.node_name || `node-${record.node_id}`,
+											]);
+											const protocols = uniqueIPValues([
+												...(record.protocols || []),
+												record.protocol,
+											]);
+											const inbounds = uniqueIPValues([
+												...(record.inbound_tags || []),
+												record.inbound_tag,
+											]);
+											const ip = record.ip || record.assigned_ip || "-";
+											const metadata = [
+												protocols.join(", "),
+												inbounds.join(", "),
+												nodes.join(", "),
+											]
+												.filter(Boolean)
+												.join(" · ");
+											const assignedIPs = uniqueIPValues([
+												...(record.assigned_ips || []),
+												record.assigned_ip,
+											]).filter((value) => value !== ip);
+											const connections = Math.max(record.connections || 1, 1);
+
+											return (
+												<Box
+													as="article"
+													key={ip === "-" ? `${metadata}-${index}` : ip}
+													p={3}
+													borderWidth="1px"
+													borderColor="panel.border"
+													borderRadius="6px"
+												>
+													<Flex
+														justify="space-between"
+														direction={{ base: "column", sm: "row" }}
+														align={{ base: "stretch", sm: "flex-start" }}
+														gap={3}
+													>
+														<OperatorIdentity
+															shortName={record.operator_short_name}
+															owner={record.operator_owner}
+														/>
+														<Box minW={0} textAlign={{ base: "start", sm: "end" }}>
+															<HStack
+																spacing={1.5}
+																justify={{ base: "flex-start", sm: "flex-end" }}
+															>
+																<Text
+																	dir="ltr"
+																	fontFamily="mono"
+																	fontWeight="700"
+																	fontSize="sm"
+																	overflowWrap="anywhere"
+																>
+																	{ip}
+																</Text>
+																{ip !== "-" && (
+																	<IconButton
+																		aria-label="Copy IP"
+																		size="xs"
+																		variant="ghost"
+																		icon={<ClipboardIcon width={13} />}
+																		onClick={() => copyUserText(ip, t("copied"))}
+																	/>
+																)}
+															</HStack>
+															<HStack
+																mt={0.5}
+																spacing={1}
+																justify={{ base: "flex-start", sm: "flex-end" }}
+																color="panel.textSecondary"
+																fontSize="xs"
+															>
+																<SignalIcon width={14} aria-hidden="true" />
+																<Text>
+																	{t("usersTable.ipConnections_other", {
+																		count: connections,
+																	})}
+																</Text>
+															</HStack>
+														</Box>
+													</Flex>
+
+													<HStack
+														mt={3}
+														spacing={3}
+														flexWrap="wrap"
+														color="panel.textMuted"
+														fontSize="xs"
+													>
+														{protocols.length > 0 && (
+															<HStack spacing={1}>
+																<GlobeAltIcon width={14} aria-hidden="true" />
+																<Text>{protocols.join(", ")}</Text>
+															</HStack>
+														)}
+														{inbounds.length > 0 && (
+															<HStack spacing={1}>
+																<LinkIcon width={14} aria-hidden="true" />
+																<Text>{inbounds.join(", ")}</Text>
+															</HStack>
+														)}
+														{nodes.length > 0 && (
+															<HStack spacing={1}>
+																<ServerStackIcon width={14} aria-hidden="true" />
+																<Text>{nodes.join(", ")}</Text>
+															</HStack>
+														)}
+														{record.last_seen_at && (
+															<HStack spacing={1}>
+																<ClockIcon width={14} aria-hidden="true" />
+																<Text dir="ltr">
+																	{dayjs(record.last_seen_at).format(
+																		"YYYY-MM-DD HH:mm",
+																	)}
+																</Text>
+															</HStack>
+														)}
+													</HStack>
+													{assignedIPs.length > 0 && (
+														<Text
+															mt={1}
+															fontSize="xs"
+															color="panel.textSecondary"
+															overflowWrap="anywhere"
+														>
+															{t("usersTable.assignedIp")}:{" "}
+															<chakra.span dir="ltr" display="inline-block">
+																{assignedIPs.join(", ")}
+															</chakra.span>
+														</Text>
+													)}
+												</Box>
+											);
+										})}
+									</Stack>
+								)}
+							</TabPanel>
+
+							{/* Panel 2: Hardware / HWID */}
+							<TabPanel px={0} py={2}>
+								<Flex justify="space-between" align="center" mb={3}>
+									<Text fontSize="xs" color="panel.textMuted">
+										{t("userDialog.registeredDevices")} ({ipDialog?.hwids.length ?? 0})
+									</Text>
+									<Button
+										size="xs"
+										colorScheme="red"
+										variant="outline"
+										isLoading={ipDialog?.resettingHwids}
+										isDisabled={!ipDialog?.hwids.length}
+										onClick={handleResetDialogHWIDs}
+									>
+										{t("userDialog.resetDevices")}
+									</Button>
+								</Flex>
+
+								{ipDialog?.loading ? (
+									<Flex align="center" justify="center" gap={3} py={8}>
+										<Spinner size="sm" color="panel.accent" />
+										<Text fontSize="sm" color="panel.textMuted">
+											{t("usersTable.ipsDialogLoading")}
+										</Text>
+									</Flex>
+								) : !ipDialog?.hwids.length ? (
+									<Box
+										borderWidth="1px"
+										borderColor="panel.border"
+										borderRadius="md"
+										px={4}
+										py={8}
+										textAlign="center"
+									>
+										<Text fontSize="sm" color="panel.textMuted">
+											{t("usersTable.noHardwareDevices")}
+										</Text>
+									</Box>
+								) : (
+									<Stack spacing={2.5}>
+										{ipDialog.hwids.map((hw) => (
+											<Box
+												key={hw.id}
+												p={3}
+												borderWidth="1px"
+												borderColor="panel.border"
+												borderRadius="6px"
+												bg="panel.surface"
+											>
+												<Flex justify="space-between" align="flex-start" gap={2}>
+													<VStack align="start" spacing={1} maxW="75%" minW={0}>
+														<HStack spacing={1.5}>
+															<Text
+																dir="ltr"
+																fontFamily="mono"
+																fontWeight="700"
+																fontSize="sm"
+																isTruncated
+															>
+																{hw.hwid}
+															</Text>
+															<IconButton
+																aria-label="Copy HWID"
+																size="xs"
+																variant="ghost"
+																icon={<ClipboardIcon width={13} />}
+																onClick={() => copyUserText(hw.hwid, t("copied"))}
+															/>
+														</HStack>
+														{hw.user_agent && (
+															<Text fontSize="xs" color="panel.textMuted" isTruncated>
+																{hw.user_agent}
+															</Text>
+														)}
+													</VStack>
+
+													<Badge
+														fontSize="2xs"
+														colorScheme="purple"
+														px={2}
+														py={0.5}
+														borderRadius="full"
+													>
+														{hw.last_seen_at
+															? dayjs(hw.last_seen_at).format("YYYY-MM-DD HH:mm")
+															: "-"}
+													</Badge>
+												</Flex>
+											</Box>
+										))}
+									</Stack>
+								)}
+							</TabPanel>
+						</TabPanels>
+					</Tabs>
 				</Stack>
 			</AppDialog>
 			<ConfirmDialog
@@ -2092,9 +2158,23 @@ const ActionButtons: FC<ActionButtonsProps> = ({
 						icon={copied ? <CopiedIcon /> : <SubscriptionLinkIcon />}
 						variant="ghost"
 						size="sm"
-						minW="30px"
-						h="30px"
+						minW="32px"
+						h="32px"
+						borderRadius="full"
+						borderWidth="1px"
+						borderColor="transparent"
 						isDisabled={!subscriptionLink}
+						transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+						_hover={{
+							borderColor: "var(--rb-panel-accent-glow)",
+							bg: "var(--rb-panel-accent-soft)",
+							color: "var(--rb-panel-accent)",
+							transform: "scale(1.08)",
+							boxShadow: "0 0 10px var(--rb-panel-accent-glow)",
+						}}
+						_active={{
+							transform: "scale(0.95)",
+						}}
 						onClick={() => {
 							void copyTextToClipboard(subscriptionLink)
 								.then(() => {
@@ -2114,9 +2194,23 @@ const ActionButtons: FC<ActionButtonsProps> = ({
 						icon={copiedConfigs ? <CopiedIcon /> : <CopyIcon />}
 						variant="ghost"
 						size="sm"
-						minW="30px"
-						h="30px"
+						minW="32px"
+						h="32px"
+						borderRadius="full"
+						borderWidth="1px"
+						borderColor="transparent"
 						isDisabled={!hasConfigLinks}
+						transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+						_hover={{
+							borderColor: "var(--rb-panel-accent-glow)",
+							bg: "var(--rb-panel-accent-soft)",
+							color: "var(--rb-panel-accent)",
+							transform: "scale(1.08)",
+							boxShadow: "0 0 10px var(--rb-panel-accent-glow)",
+						}}
+						_active={{
+							transform: "scale(0.95)",
+						}}
 						onClick={() => {
 							void copyTextToClipboard(configLinksText)
 								.then(() => setCopiedConfigs(true))
@@ -2131,8 +2225,22 @@ const ActionButtons: FC<ActionButtonsProps> = ({
 					icon={<QRIcon />}
 					variant="ghost"
 					size="sm"
-					minW="30px"
-					h="30px"
+					minW="32px"
+					h="32px"
+					borderRadius="full"
+					borderWidth="1px"
+					borderColor="transparent"
+					transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+					_hover={{
+						borderColor: "var(--rb-panel-accent-glow)",
+						bg: "var(--rb-panel-accent-soft)",
+						color: "var(--rb-panel-accent)",
+						transform: "scale(1.08)",
+						boxShadow: "0 0 10px var(--rb-panel-accent-glow)",
+					}}
+					_active={{
+						transform: "scale(0.95)",
+					}}
 					onClick={() => {
 						const links = generateUserLinks(user, linkTemplates);
 						setQRCode(links, user.username);
@@ -2147,8 +2255,22 @@ const ActionButtons: FC<ActionButtonsProps> = ({
 						icon={<EditIcon />}
 						variant="ghost"
 						size="sm"
-						minW="30px"
-						h="30px"
+						minW="32px"
+						h="32px"
+						borderRadius="full"
+						borderWidth="1px"
+						borderColor="transparent"
+						transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+						_hover={{
+							borderColor: "var(--rb-panel-accent-glow)",
+							bg: "var(--rb-panel-accent-soft)",
+							color: "var(--rb-panel-accent)",
+							transform: "scale(1.08)",
+							boxShadow: "0 0 10px var(--rb-panel-accent-glow)",
+						}}
+						_active={{
+							transform: "scale(0.95)",
+						}}
 						onClick={onEdit}
 					/>
 				</Tooltip>
@@ -2163,10 +2285,23 @@ const ActionButtons: FC<ActionButtonsProps> = ({
 						icon={<DeleteIcon />}
 						variant="ghost"
 						size="sm"
-						minW="30px"
-						h="30px"
+						minW="32px"
+						h="32px"
+						borderRadius="full"
+						borderWidth="1px"
+						borderColor="transparent"
 						color="red.400"
-						_hover={{ color: "red.300", bg: "whiteAlpha.100" }}
+						transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+						_hover={{
+							borderColor: "rgba(239, 68, 68, 0.4)",
+							bg: "rgba(239, 68, 68, 0.12)",
+							color: "red.300",
+							transform: "scale(1.08)",
+							boxShadow: "0 0 10px rgba(239, 68, 68, 0.35)",
+						}}
+						_active={{
+							transform: "scale(0.95)",
+						}}
 					/>
 				</DeleteConfirmDialog>
 			)}
@@ -2175,6 +2310,7 @@ const ActionButtons: FC<ActionButtonsProps> = ({
 			)}
 		</HStack>
 	);
+
 };
 
 type EmptySectionProps = {

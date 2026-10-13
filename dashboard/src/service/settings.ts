@@ -176,6 +176,15 @@ export interface SubscriptionTemplateSettings {
 	client_routing_rules?: ClientRoutingRule[];
 	subscription_placeholder_enabled: boolean;
 	subscription_placeholder_remark: string;
+	subscription_announcement?: string;
+	happ_sub_info_color?: string;
+	happ_sub_info_button_text?: string;
+	happ_sub_info_button_link?: string;
+	happ_sub_expire?: boolean;
+	happ_sub_expire_button_link?: string;
+	happ_announcement_target_type?: "all" | "selected";
+	happ_announcement_target_users?: string;
+	default_device_limit_type?: "ip" | "hwid";
 }
 
 export type SubscriptionTemplateSettingsUpdatePayload =
@@ -834,4 +843,18 @@ export const updateSubscriptionCertificateServing = async (
 			body: JSON.stringify({ serve_tls: serveTLS }),
 		},
 	);
+};
+
+export const getUserHWIDs = async (
+	username: string,
+): Promise<{ username: string; hwids: import("../types/User").UserHWID[] }> => {
+	return apiFetch(`/user/${encodeURIComponent(username)}/hwids`, {
+		method: "GET",
+	});
+};
+
+export const resetUserHWIDs = async (username: string): Promise<void> => {
+	return apiFetch(`/user/${encodeURIComponent(username)}/hwids`, {
+		method: "DELETE",
+	});
 };

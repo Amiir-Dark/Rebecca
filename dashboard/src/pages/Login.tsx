@@ -52,6 +52,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { QRCodeCanvas } from "qrcode.react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
 	confirm2FASetup,
 	getSession,
@@ -118,6 +119,34 @@ type LoginFieldProps = {
 	type?: string;
 };
 
+const cardVariants = {
+	initial: {
+		opacity: 0,
+		y: 28,
+		scale: 0.95,
+	},
+	animate: {
+		opacity: 1,
+		y: 0,
+		scale: 1,
+		filter: "blur(0px)",
+		transition: {
+			duration: 0.55,
+			ease: [0.16, 1, 0.3, 1],
+		},
+	},
+	success: {
+		opacity: 0,
+		scale: 1.28,
+		filter: "blur(16px)",
+		y: -12,
+		transition: {
+			duration: 0.55,
+			ease: [0.22, 1, 0.36, 1],
+		},
+	},
+};
+
 const LoginField: FC<LoginFieldProps> = ({
 	autoComplete,
 	dir,
@@ -164,7 +193,7 @@ const LoginField: FC<LoginFieldProps> = ({
 					autoComplete={autoComplete}
 					bg={fieldBg}
 					borderColor={isInvalid ? "red.400" : borderColor}
-					borderRadius="8px"
+					borderRadius="10px"
 					color={textColor}
 					fontSize="sm"
 					h="44px"
@@ -172,6 +201,7 @@ const LoginField: FC<LoginFieldProps> = ({
 					placeholder={placeholder}
 					ps="3rem"
 					type={type}
+					transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
 					_placeholder={{ color: mutedColor }}
 					_hover={{
 						borderColor: isInvalid
@@ -288,6 +318,7 @@ export const Login: FC = () => {
 	const [otp, setOTP] = useState("");
 	const [setup, setSetup] = useState<TOTPSetup | null>(null);
 	const [challengeLoading, setChallengeLoading] = useState(false);
+	const [isSuccessTransition, setIsSuccessTransition] = useState(false);
 	const navigate = useNavigate();
 	const { t, i18n } = useTranslation();
 	const dir = i18n.language === "fa" ? "rtl" : "ltr";
@@ -364,9 +395,12 @@ export const Login: FC = () => {
 			.catch(() => undefined);
 	}, [navigate]);
 
-	const completeLogin = () => {
-		clearClientSession();
-		navigate("/");
+	const completeLogin = (to: string = "/") => {
+		setIsSuccessTransition(true);
+		window.setTimeout(() => {
+			clearClientSession();
+			navigate(to);
+		}, 520);
 	};
 
 	const openRequiredSetup = async () => {
@@ -384,10 +418,9 @@ export const Login: FC = () => {
 			} else if (session.state === "setup_required") {
 				await openRequiredSetup();
 			} else if (session.state === "disabled") {
-				clearClientSession();
-				navigate("/users");
+				completeLogin("/users");
 			} else {
-				completeLogin();
+				completeLogin("/");
 			}
 		} catch (err: any) {
 			setError(err.response?._data?.detail || "Login failed");
@@ -399,7 +432,7 @@ export const Login: FC = () => {
 		setChallengeLoading(true);
 		try {
 			await verify2FA(otp);
-			completeLogin();
+			completeLogin("/");
 		} catch (err: any) {
 			setError(err.response?._data?.detail || "Invalid authentication code");
 		} finally {
@@ -412,7 +445,7 @@ export const Login: FC = () => {
 		setChallengeLoading(true);
 		try {
 			await confirm2FASetup(otp);
-			completeLogin();
+			completeLogin("/");
 		} catch (err: any) {
 			setError(err.response?._data?.detail || "Invalid authentication code");
 		} finally {
@@ -462,175 +495,389 @@ export const Login: FC = () => {
 			px={{ base: 4, md: 10 }}
 			py={{ base: 6, md: 10 }}
 			w="full"
+			position="relative"
+			overflow="hidden"
 		>
-			<VStack maxW="400px" spacing={6} w="full">
+			{/* Ambient Glowing Orbs Background */}
+			<Box
+				position="absolute"
+				inset={0}
+				pointerEvents="none"
+				overflow="hidden"
+				zIndex={0}
+			>
+				<motion.div
+					animate={{
+						x: [0, 30, -25, 0],
+						y: [0, -35, 25, 0],
+						scale: isSuccessTransition ? 1.3 : [1, 1.15, 0.95, 1],
+						opacity: isSuccessTransition ? 0.35 : [0.15, 0.22, 0.15],
+					}}
+					transition={{
+						duration: isSuccessTransition ? 0.55 : 14,
+						repeat: isSuccessTransition ? 0 : Infinity,
+						repeatType: "reverse",
+						ease: "easeInOut",
+					}}
+					style={{
+						position: "absolute",
+						top: "-15%",
+						right: "-10%",
+						width: "550px",
+						height: "550px",
+						borderRadius: "50%",
+						background:
+							"radial-gradient(circle, var(--rb-panel-accent, #3b82f6) 0%, transparent 70%)",
+						filter: "blur(70px)",
+					}}
+				/>
+				<motion.div
+					animate={{
+						x: [0, -35, 25, 0],
+						y: [0, 25, -30, 0],
+						scale: isSuccessTransition ? 1.4 : [1, 0.9, 1.1, 1],
+						opacity: isSuccessTransition ? 0.35 : [0.12, 0.2, 0.12],
+					}}
+					transition={{
+						duration: isSuccessTransition ? 0.55 : 18,
+						repeat: isSuccessTransition ? 0 : Infinity,
+						repeatType: "reverse",
+						ease: "easeInOut",
+					}}
+					style={{
+						position: "absolute",
+						bottom: "-15%",
+						left: "-10%",
+						width: "600px",
+						height: "600px",
+						borderRadius: "50%",
+						background:
+							"radial-gradient(circle, var(--rb-panel-accent-hover, #6366f1) 0%, transparent 70%)",
+						filter: "blur(80px)",
+					}}
+				/>
 				<Box
-					bg={surfaceBg}
-					borderColor={borderColor}
-					borderRadius="8px"
-					borderWidth="1px"
-					boxShadow="0 18px 60px rgba(0, 0, 0, 0.22)"
-					p={{ base: 5, sm: 6 }}
-					w="full"
+					position="absolute"
+					inset={0}
+					background="radial-gradient(circle at 50% 50%, transparent 35%, rgba(0, 0, 0, 0.22) 100%)"
+				/>
+			</Box>
+
+			<VStack maxW="420px" spacing={6} w="full" position="relative" zIndex={1}>
+				<motion.div
+					variants={cardVariants}
+					initial="initial"
+					animate={isSuccessTransition ? "success" : "animate"}
+					style={{ width: "100%", position: "relative" }}
 				>
-					<HStack justifyContent="space-between" mb={7} spacing={3}>
-						<HStack color={textColor} minW={0} spacing={3}>
-							<Box
-								alignItems="center"
-								bg={elevatedBg}
-								borderColor={borderColor}
-								borderRadius="8px"
-								borderWidth="1px"
-								display="inline-flex"
-								flexShrink={0}
-								h={10}
-								justifyContent="center"
-								w={10}
-							>
-								<LogoIcon
-									alt={t("menu")}
-									filter={logoFilter}
-									src={logoUrl}
-								/>
-							</Box>
-							<Text fontSize="lg" fontWeight="800" noOfLines={1}>
-								Rebecca
-							</Text>
-						</HStack>
-						<HStack flexShrink={0} spacing={2}>
-							<Language triggerVariant="ghost" />
-							<LoginThemeMenu />
-						</HStack>
-					</HStack>
+					<Box
+						bg={surfaceBg}
+						borderColor={borderColor}
+						borderRadius="16px"
+						borderWidth="1px"
+						boxShadow="0 24px 64px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.05)"
+						p={{ base: 6, sm: 8 }}
+						w="full"
+						position="relative"
+						overflow="hidden"
+						backdropFilter="blur(16px)"
+					>
+						{/* Top Accent Gradient Border Highlight */}
+						<Box
+							position="absolute"
+							top="0"
+							left="12%"
+							right="12%"
+							h="2px"
+							bgGradient="linear(to-r, transparent, var(--rb-panel-accent, #3b82f6), transparent)"
+							opacity={0.85}
+						/>
 
-					<VStack align="stretch" spacing={1} textAlign="center">
-						<Text color={textColor} fontSize="lg" fontWeight="800">
-							{step === "credentials"
-								? t("login.welcome")
-								: step === "otp"
-									? t("login.twoFactorTitle")
-									: t("login.setupTwoFactorTitle")}
-						</Text>
-						<Text color={mutedColor} fontSize="sm">
-							{step === "credentials"
-								? t("login.welcomeBack")
-								: step === "otp"
-									? t("login.twoFactorHint")
-									: t("login.setupTwoFactorHint")}
-						</Text>
-					</VStack>
-
-					<Box mt={6}>
-						{step === "credentials" ? (
-						<form onSubmit={handleSubmit(login, handleInvalid)}>
-							<VStack spacing={4}>
-								<LoginField
-									autoComplete="username"
-									dir={dir}
-									errorMessage={
-										errors.username?.message
-											? t(errors.username.message as string)
-											: undefined
-									}
-									icon={<User />}
-									label={t("username")}
-									placeholder={t("username")}
-									registration={register("username")}
-								/>
-								<LoginField
-									autoComplete="current-password"
-									dir={dir}
-									endElement={passwordToggle}
-									errorMessage={
-										errors.password?.message
-											? t(errors.password.message as string)
-											: undefined
-									}
-									icon={<Lock />}
-									label={t("password")}
-									placeholder={t("password")}
-									registration={register("password")}
-									type={showPassword ? "text" : "password"}
-								/>
-
-								{error && (
-									<Alert
-										borderRadius="8px"
-										fontSize="sm"
-										status="error"
-										variant="left-accent"
-										w="full"
-									>
-										<AlertIcon />
-										<AlertDescription>{error}</AlertDescription>
-									</Alert>
-								)}
-
-								<Button
-									bg={accentColor}
-									borderRadius="8px"
-									color="white"
-									h="44px"
-									isDisabled={!canSubmit}
-									isLoading={isSubmitting}
-									leftIcon={<LoginIcon />}
-									mt={1}
-									type="submit"
-									w="full"
-									_hover={{ bg: "var(--rb-panel-accent-hover)" }}
-									_active={{ transform: "translateY(1px)" }}
-								>
-									{t("login")}
-								</Button>
-							</VStack>
-						</form>
-						) : (
-							<VStack spacing={4}>
-								{step === "setup" && setup && (
-									<>
-										<Box bg="white" borderRadius="8px" p={3}>
-											<QRCodeCanvas value={setup.uri} size={180} />
-										</Box>
-										<Text color={mutedColor} fontFamily="mono" fontSize="xs" wordBreak="break-all">
-											{setup.secret}
-										</Text>
-									</>
-								)}
-								<FormControl>
-									<FormLabel>{t("login.authenticationCode")}</FormLabel>
-									<CInput
-										autoComplete="one-time-code"
-										inputMode="numeric"
-										maxLength={6}
-										textAlign="center"
-										value={otp}
-										onChange={(event) => setOTP(event.target.value.replace(/\D/g, ""))}
-									/>
-								</FormControl>
-								{error && (
-									<Alert borderRadius="8px" fontSize="sm" status="error" variant="left-accent" w="full">
-										<AlertIcon />
-										<AlertDescription>{error}</AlertDescription>
-									</Alert>
-								)}
-								<Button
-									bg={accentColor}
-									color="white"
-									h="44px"
-									isDisabled={otp.length !== 6}
-									isLoading={challengeLoading}
-									onClick={step === "otp" ? submitOTP : confirmSetup}
-									w="full"
-								>
-									{t("continue")}
-								</Button>
-								<Button onClick={cancelChallenge} variant="ghost" w="full">
-									{t("back")}
-								</Button>
-							</VStack>
+						{/* Success Glow Burst */}
+						{isSuccessTransition && (
+							<motion.div
+								initial={{ opacity: 0, scale: 0.8 }}
+								animate={{ opacity: [0, 0.7, 0], scale: [0.8, 1.25, 1.8] }}
+								transition={{ duration: 0.55, ease: "easeOut" }}
+								style={{
+									position: "absolute",
+									inset: 0,
+									background:
+										"radial-gradient(circle, var(--rb-panel-accent, #3b82f6) 0%, transparent 70%)",
+									pointerEvents: "none",
+									zIndex: 2,
+								}}
+							/>
 						)}
+
+						<HStack justifyContent="space-between" mb={7} spacing={3}>
+							<HStack color={textColor} minW={0} spacing={3}>
+								<motion.div
+									whileHover={{ rotate: 8, scale: 1.08 }}
+									transition={{ type: "spring", stiffness: 300, damping: 15 }}
+								>
+									<Box
+										alignItems="center"
+										bg={elevatedBg}
+										borderColor={borderColor}
+										borderRadius="10px"
+										borderWidth="1px"
+										display="inline-flex"
+										flexShrink={0}
+										h={10}
+										justifyContent="center"
+										w={10}
+										boxShadow="0 4px 12px rgba(0, 0, 0, 0.08)"
+									>
+										<LogoIcon
+											alt={t("menu")}
+											filter={logoFilter}
+											src={logoUrl}
+										/>
+									</Box>
+								</motion.div>
+								<Text fontSize="lg" fontWeight="800" noOfLines={1}>
+									Rebecca
+								</Text>
+							</HStack>
+							<HStack flexShrink={0} spacing={2}>
+								<Language triggerVariant="ghost" />
+								<LoginThemeMenu />
+							</HStack>
+						</HStack>
+
+						<VStack align="stretch" spacing={1} textAlign="center">
+							<Text color={textColor} fontSize="lg" fontWeight="800">
+								{step === "credentials"
+									? t("login.welcome")
+									: step === "otp"
+										? t("login.twoFactorTitle")
+										: t("login.setupTwoFactorTitle")}
+							</Text>
+							<Text color={mutedColor} fontSize="sm">
+								{step === "credentials"
+									? t("login.welcomeBack")
+									: step === "otp"
+										? t("login.twoFactorHint")
+										: t("login.setupTwoFactorHint")}
+							</Text>
+						</VStack>
+
+						<Box mt={6}>
+							{step === "credentials" ? (
+								<form onSubmit={handleSubmit(login, handleInvalid)}>
+									<VStack spacing={4}>
+										<LoginField
+											autoComplete="username"
+											dir={dir}
+											errorMessage={
+												errors.username?.message
+													? t(errors.username.message as string)
+													: undefined
+											}
+											icon={<User />}
+											label={t("username")}
+											placeholder={t("username")}
+											registration={register("username")}
+										/>
+										<LoginField
+											autoComplete="current-password"
+											dir={dir}
+											endElement={passwordToggle}
+											errorMessage={
+												errors.password?.message
+													? t(errors.password.message as string)
+													: undefined
+											}
+											icon={<Lock />}
+											label={t("password")}
+											placeholder={t("password")}
+											registration={register("password")}
+											type={showPassword ? "text" : "password"}
+										/>
+
+										<AnimatePresence mode="wait">
+											{error && (
+												<motion.div
+													key="login-error-alert"
+													initial={{ opacity: 0, y: -8, scale: 0.97 }}
+													animate={{
+														opacity: 1,
+														y: 0,
+														scale: 1,
+														x: [0, -6, 6, -4, 4, 0],
+													}}
+													exit={{ opacity: 0, y: -8, scale: 0.97 }}
+													transition={{ duration: 0.35, ease: "easeInOut" }}
+													style={{ width: "100%" }}
+												>
+													<Alert
+														borderRadius="10px"
+														fontSize="sm"
+														status="error"
+														variant="left-accent"
+														w="full"
+													>
+														<AlertIcon />
+														<AlertDescription>{error}</AlertDescription>
+													</Alert>
+												</motion.div>
+											)}
+										</AnimatePresence>
+
+										<motion.div
+											whileHover={
+												!isSubmitting && canSubmit && !isSuccessTransition
+													? { scale: 1.015 }
+													: {}
+											}
+											whileTap={
+												!isSubmitting && canSubmit && !isSuccessTransition
+													? { scale: 0.985 }
+													: {}
+											}
+											style={{ width: "100%" }}
+										>
+											<Button
+												bg={isSuccessTransition ? "green.500" : accentColor}
+												borderRadius="10px"
+												color="white"
+												h="46px"
+												isDisabled={!canSubmit || isSuccessTransition}
+												isLoading={isSubmitting}
+												leftIcon={
+													isSuccessTransition ? <Check /> : <LoginIcon />
+												}
+												mt={1}
+												type="submit"
+												w="full"
+												fontWeight="700"
+												fontSize="sm"
+												boxShadow="0 4px 14px 0 var(--rb-panel-accent-glow, rgba(59, 130, 246, 0.3))"
+												transition="all 0.25s ease"
+												_hover={{
+													bg: isSuccessTransition
+														? "green.500"
+														: "var(--rb-panel-accent-hover)",
+													boxShadow:
+														"0 6px 20px 0 var(--rb-panel-accent-glow, rgba(59, 130, 246, 0.45))",
+												}}
+												_active={{ transform: "translateY(1px)" }}
+											>
+												{isSuccessTransition
+													? t("common.success") || "..."
+													: t("login")}
+											</Button>
+										</motion.div>
+									</VStack>
+								</form>
+							) : (
+								<VStack spacing={4}>
+									{step === "setup" && setup && (
+										<>
+											<Box bg="white" borderRadius="10px" p={3}>
+												<QRCodeCanvas value={setup.uri} size={180} />
+											</Box>
+											<Text
+												color={mutedColor}
+												fontFamily="mono"
+												fontSize="xs"
+												wordBreak="break-all"
+											>
+												{setup.secret}
+											</Text>
+										</>
+									)}
+									<FormControl>
+										<FormLabel>{t("login.authenticationCode")}</FormLabel>
+										<CInput
+											autoComplete="one-time-code"
+											borderRadius="10px"
+											h="46px"
+											inputMode="numeric"
+											maxLength={6}
+											textAlign="center"
+											fontSize="lg"
+											letterSpacing="0.2em"
+											value={otp}
+											onChange={(event) =>
+												setOTP(event.target.value.replace(/\D/g, ""))
+											}
+										/>
+									</FormControl>
+									<AnimatePresence mode="wait">
+										{error && (
+											<motion.div
+												key="otp-error-alert"
+												initial={{ opacity: 0, y: -8, scale: 0.97 }}
+												animate={{
+													opacity: 1,
+													y: 0,
+													scale: 1,
+													x: [0, -6, 6, -4, 4, 0],
+												}}
+												exit={{ opacity: 0, y: -8, scale: 0.97 }}
+												transition={{ duration: 0.35, ease: "easeInOut" }}
+												style={{ width: "100%" }}
+											>
+												<Alert
+													borderRadius="10px"
+													fontSize="sm"
+													status="error"
+													variant="left-accent"
+													w="full"
+												>
+													<AlertIcon />
+													<AlertDescription>{error}</AlertDescription>
+												</Alert>
+											</motion.div>
+										)}
+									</AnimatePresence>
+									<motion.div
+										whileHover={
+											otp.length === 6 &&
+											!challengeLoading &&
+											!isSuccessTransition
+												? { scale: 1.015 }
+												: {}
+										}
+										whileTap={
+											otp.length === 6 &&
+											!challengeLoading &&
+											!isSuccessTransition
+												? { scale: 0.985 }
+												: {}
+										}
+										style={{ width: "100%" }}
+									>
+										<Button
+											bg={isSuccessTransition ? "green.500" : accentColor}
+											color="white"
+											borderRadius="10px"
+											h="46px"
+											isDisabled={otp.length !== 6 || isSuccessTransition}
+											isLoading={challengeLoading}
+											leftIcon={isSuccessTransition ? <Check /> : undefined}
+											onClick={step === "otp" ? submitOTP : confirmSetup}
+											w="full"
+											fontWeight="700"
+											fontSize="sm"
+											boxShadow="0 4px 14px 0 var(--rb-panel-accent-glow, rgba(59, 130, 246, 0.3))"
+											transition="all 0.25s ease"
+										>
+											{isSuccessTransition
+												? t("common.success") || "..."
+												: t("continue")}
+										</Button>
+									</motion.div>
+									<Button onClick={cancelChallenge} variant="ghost" w="full">
+										{t("back")}
+									</Button>
+								</VStack>
+							)}
+						</Box>
 					</Box>
-				</Box>
+				</motion.div>
 			</VStack>
 		</Box>
 	);

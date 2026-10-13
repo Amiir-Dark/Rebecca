@@ -3,6 +3,7 @@ export { UserExpiryCountdown } from "./UserExpiryCountdown";
 export { UserQuickEditModal } from "./UserQuickEditModal";
 export { UserOnlineBadge } from "./UserStatusDot";
 export { UsersFilterBar } from "./UsersFilterBar";
+export { UsersSummaryCards } from "./UsersSummaryCards";
 export {
 	formatUsagePair,
 	UserUsageBar,

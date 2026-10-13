@@ -96,6 +96,14 @@ func effectiveSubscriptionSettings(base SubscriptionSettings, admin AdminLinkSet
 		ClientRoutingRules:         	append([]ClientRoutingRule{}, base.ClientRoutingRules...), // <--- این خط حتماً باید اضافه شود
 		SubscriptionPlaceholderEnabled: base.SubscriptionPlaceholderEnabled,
 		SubscriptionPlaceholderRemark:  firstNonEmptyString(base.SubscriptionPlaceholderRemark, "disabled"),
+		SubscriptionAnnouncement:       base.SubscriptionAnnouncement,
+		HappSubInfoColor:               base.HappSubInfoColor,
+		HappSubInfoButtonText:          base.HappSubInfoButtonText,
+		HappSubInfoButtonLink:          base.HappSubInfoButtonLink,
+		HappSubExpire:                  base.HappSubExpire,
+		HappSubExpireButtonLink:        base.HappSubExpireButtonLink,
+		HappAnnouncementTargetType:     firstNonEmptyString(base.HappAnnouncementTargetType, "all"),
+		HappAnnouncementTargetUsers:    base.HappAnnouncementTargetUsers,
 		RawPanelSettings:               base.RawPanelSettings,
 		RawSubscriptionSettings:        base.RawSubscriptionSettings,
 	}
@@ -145,6 +153,36 @@ func effectiveSubscriptionSettings(base SubscriptionSettings, admin AdminLinkSet
 		case "subscription_placeholder_remark":
 			if text, ok := coerceString(value); ok && strings.TrimSpace(text) != "" {
 				effective.SubscriptionPlaceholderRemark = strings.TrimSpace(text)
+			}
+		case "subscription_announcement":
+			if text, ok := coerceString(value); ok {
+				effective.SubscriptionAnnouncement = strings.TrimSpace(text)
+			}
+		case "happ_sub_info_color":
+			if text, ok := coerceString(value); ok {
+				effective.HappSubInfoColor = strings.TrimSpace(text)
+			}
+		case "happ_sub_info_button_text":
+			if text, ok := coerceString(value); ok {
+				effective.HappSubInfoButtonText = strings.TrimSpace(text)
+			}
+		case "happ_sub_info_button_link":
+			if text, ok := coerceString(value); ok {
+				effective.HappSubInfoButtonLink = strings.TrimSpace(text)
+			}
+		case "happ_sub_expire":
+			effective.HappSubExpire = truthy(value)
+		case "happ_sub_expire_button_link":
+			if text, ok := coerceString(value); ok {
+				effective.HappSubExpireButtonLink = strings.TrimSpace(text)
+			}
+		case "happ_announcement_target_type":
+			if text, ok := coerceString(value); ok {
+				effective.HappAnnouncementTargetType = strings.TrimSpace(text)
+			}
+		case "happ_announcement_target_users":
+			if text, ok := coerceString(value); ok {
+				effective.HappAnnouncementTargetUsers = strings.TrimSpace(text)
 			}
 		}
 	}

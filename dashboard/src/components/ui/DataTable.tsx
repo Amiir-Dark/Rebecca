@@ -506,7 +506,8 @@ export function DataTable<TData>({
 	mobileBreakpoint = "md",
 	ariaLabel,
 }: DataTableProps<TData>) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
+	const isRTL = (dir ?? i18n.dir(i18n.language)) === "rtl";
 	const actionsLabel = t("actions");
 	const selectAllLabel = t("selectAll");
 	const selectRowLabel = t("selectRow");
@@ -1410,33 +1411,48 @@ export function DataTable<TData>({
 				</BulkActionBar>
 			)}
 			{contextMenu.row && contextMenuActions.length > 0 && (
-				<Menu
-					isOpen
-					autoSelect={false}
-					placement="bottom-start"
-					strategy="fixed"
-					onClose={closeContextMenu}
-				>
-					<MenuButton
-						as={Box}
-						position="fixed"
-						top={`${contextMenu.y}px`}
-						left={`${contextMenu.x}px`}
-						w="1px"
-						h="1px"
-						opacity={0}
-						pointerEvents="none"
-					/>
-					<Portal>
+				<Portal>
+					<Menu
+						key={`${contextMenu.x}-${contextMenu.y}`}
+						isOpen
+						autoSelect={false}
+						placement={isRTL ? "bottom-end" : "bottom-start"}
+						strategy="fixed"
+						onClose={closeContextMenu}
+					>
+						<MenuButton
+							as={Box}
+							position="fixed"
+							top={`${contextMenu.y}px`}
+							left={`${contextMenu.x}px`}
+							w="1px"
+							h="1px"
+							opacity={0}
+							pointerEvents="none"
+						/>
 						<MenuList
 							data-rb-context-menu=""
 							minW="220px"
 							maxW="calc(100vw - 24px)"
-							maxH="min(70vh, 420px)"
+							maxH="min(85vh, 480px)"
 							overflowY="auto"
 							overflowX="hidden"
 							overscrollBehavior="contain"
 							zIndex={2500}
+							bg="panel.surface"
+							borderColor="panel.border"
+							boxShadow="inset 0 1px 1px 0 rgba(255, 255, 255, 0.08), 0 20px 48px rgba(0, 0, 0, 0.7)"
+							borderRadius="14px"
+							p={1.5}
+							sx={{
+								scrollbarWidth: "none",
+								msOverflowStyle: "none",
+								"&::-webkit-scrollbar": {
+									display: "none",
+									width: 0,
+									height: 0,
+								},
+							}}
 							onClick={(event) => event.stopPropagation()}
 							onContextMenu={(event) => {
 								event.preventDefault();
@@ -1453,6 +1469,7 @@ export function DataTable<TData>({
 										key={action.id}
 										icon={action.icon}
 										isDisabled={action.isDisabled}
+										borderRadius="8px"
 										color={
 											action.color ??
 											(action.isDanger ? "red.400" : undefined)
@@ -1468,8 +1485,8 @@ export function DataTable<TData>({
 								),
 							)}
 						</MenuList>
-					</Portal>
-				</Menu>
+					</Menu>
+				</Portal>
 			)}
 		</Box>
 	);

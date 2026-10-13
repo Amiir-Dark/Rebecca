@@ -3195,7 +3195,7 @@
           "Settings"
         ],
         "summary": "Update a subscription placeholder policy",
-        "description": "Set separate expired, traffic-limited, and disabled subscription messages for one admin and service assignment.",
+        "description": "Set separate custom expired, traffic-limited, and disabled subscription placeholder remark messages for one admin and service assignment.",
         "requestBody": {
           "$ref": "#/components/requestBodies/JSON"
         },
@@ -3380,7 +3380,7 @@
           "Settings"
         ],
         "summary": "Delete subscription certificate",
-        "description": "Remove one managed certificate and its metadata. Requires sudo/full_access.",
+        "description": "Remove one managed certificate and its metadata from the system. Requires sudo or full_access role permission to delete certificate assets.",
         "parameters": [
           {
             "name": "domain",
@@ -3408,7 +3408,7 @@
           "Settings"
         ],
         "summary": "Revoke subscription certificate",
-        "description": "Revoke an ACME certificate at its issuing CA and stop serving it through SNI. Requires sudo/full_access.",
+        "description": "Revoke an active ACME certificate at its issuing CA and stop serving it through SNI. Requires sudo or full_access role permission to revoke certificates.",
         "parameters": [
           {
             "name": "domain",

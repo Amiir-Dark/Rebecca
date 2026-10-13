@@ -82,10 +82,12 @@ import {
 	AdminTrafficLimitMode,
 	UserPermissionToggle,
 } from "types/Admin";
+import { getUserHWIDs, resetUserHWIDs } from "service/settings";
 import type {
 	User,
 	UserCreate,
 	UserCreateWithService,
+	UserHWID,
 	UserListItem,
 } from "types/User";
 import {
@@ -195,6 +197,7 @@ type BaseFormFields = Pick<
 	| "expire"
 	| "data_limit"
 	| "ip_limit"
+	| "device_limit_type"
 	| "data_limit_reset_strategy"
 	| "on_hold_expire_duration"
 	| "note"
@@ -205,6 +208,7 @@ type BaseFormFields = Pick<
 >;
 
 export type FormType = BaseFormFields & {
+	device_limit_type: "ip" | "hwid";
 	credential_key: string | null;
 
 	manual_key_entry: boolean;
@@ -234,6 +238,8 @@ const formatUser = (user: User): FormType => {
 			: user.data_limit,
 
 		ip_limit: user.ip_limit && user.ip_limit > 0 ? user.ip_limit : null,
+
+		device_limit_type: user.device_limit_type === "hwid" ? "hwid" : "ip",
 
 		on_hold_expire_duration: user.on_hold_expire_duration
 			? Number(user.on_hold_expire_duration / (24 * 60 * 60))
@@ -267,6 +273,8 @@ const getDefaultValues = (): FormType => {
 		data_limit: null,
 
 		ip_limit: null,
+
+		device_limit_type: "ip",
 
 		expire: null,
 
@@ -468,6 +476,8 @@ const buildSchema = (isEditing: boolean) => {
 				return Number.isFinite(value) ? value : null;
 			}),
 
+		device_limit_type: z.enum(["ip", "hwid"]).default("ip"),
+
 		manual_key_entry: z.boolean().default(false),
 
 		credential_key: z
@@ -586,6 +596,54 @@ export const UserDialog: FC<UserDialogProps> = () => {
 	const [deleteLoading, setDeleteLoading] = useState(false);
 	const submitResetTimerRef = useRef<number | null>(null);
 	const successCloseTimerRef = useRef<number | null>(null);
+
+	const [userHwids, setUserHwids] = useState<UserHWID[]>([]);
+	const [loadingHwids, setLoadingHwids] = useState(false);
+	const [resettingHwids, setResettingHwids] = useState(false);
+
+	const fetchHwids = useCallback(async (username: string) => {
+		try {
+			setLoadingHwids(true);
+			const res = await getUserHWIDs(username);
+			setUserHwids(res.hwids || []);
+		} catch {
+			setUserHwids([]);
+		} finally {
+			setLoadingHwids(false);
+		}
+	}, []);
+
+	useEffect(() => {
+		if (isOpen && isEditing && editingUser?.username) {
+			fetchHwids(editingUser.username);
+		} else {
+			setUserHwids([]);
+		}
+	}, [isOpen, isEditing, editingUser?.username, fetchHwids]);
+
+	const handleResetHwids = async () => {
+		if (!editingUser?.username) return;
+		try {
+			setResettingHwids(true);
+			await resetUserHWIDs(editingUser.username);
+			toast({
+				title: t("userDialog.hwidResetSuccess"),
+				status: "success",
+				duration: 3000,
+				isClosable: true,
+			});
+			await fetchHwids(editingUser.username);
+		} catch {
+			toast({
+				title: t("userDialog.hwidResetError"),
+				status: "error",
+				duration: 3000,
+				isClosable: true,
+			});
+		} finally {
+			setResettingHwids(false);
+		}
+	};
 
 	const [error, setError] = useState<string | null>("");
 
@@ -1682,6 +1740,8 @@ export const UserDialog: FC<UserDialogProps> = () => {
 
 				ip_limit: normalizedIpLimit,
 
+				device_limit_type: values.device_limit_type || "ip",
+
 				data_limit_reset_strategy:
 					data_limit && data_limit > 0 ? data_limit_reset_strategy : "no_reset",
 
@@ -1758,6 +1818,8 @@ export const UserDialog: FC<UserDialogProps> = () => {
 			data_limit: data_limit,
 
 			ip_limit: normalizedIpLimit,
+
+			device_limit_type: values.device_limit_type || "ip",
 
 			status:
 				status === "active" || status === "disabled" || status === "on_hold"
@@ -2366,162 +2428,60 @@ export const UserDialog: FC<UserDialogProps> = () => {
 																</FormControl>
 															</Flex>
 
-															<Stack
-																direction={{ base: "column", md: "row" }}
-																spacing={4}
+															<FormControl
 																mb={"10px"}
+																isInvalid={
+																	!!form.formState.errors.data_limit?.message
+																}
 															>
-																<FormControl
-																	flex="1"
-																	isInvalid={
-																		!!form.formState.errors.data_limit?.message
-																	}
+																<FormLabel
+																	textAlign={isRTL ? "right" : "left"}
 																>
-																	<FormLabel
-																		textAlign={isRTL ? "right" : "left"}
-																	>
-																		{t("userDialog.dataLimit")}
-																	</FormLabel>
-																	<Controller
-																		control={form.control}
-																		name="data_limit"
-																		render={({ field }) => {
-																			return (
-																				<>
-																					{renderUnitInput({
-																						unit: DATA_UNIT,
-																						value: field.value
-																							? String(field.value)
-																							: "",
-																						onChange: field.onChange,
-																						disabled,
-																					})}
-																					{isEditing && remainingDataInfo && (
-																						<FormHelperText
-																							fontSize="xs"
-																							color="gray.500"
-																							textAlign={
-																								isRTL ? "right" : "left"
-																							}
-																						>
-																							{`${remainingDataInfo.label}: ${remainingDataInfo.value}`}
-																						</FormHelperText>
-																					)}
-																					<FormErrorMessage>
-																						{
-																							form.formState.errors.data_limit
-																								?.message
-																						}
-																					</FormErrorMessage>
-																				</>
-																			);
-																		}}
-																	/>
-																</FormControl>
-																<FormControl flex="1">
-																	<FormLabel
-																		display="flex"
-																		alignItems="center"
-																		gap={2}
-																		justifyContent={
-																			isRTL ? "flex-end" : "flex-start"
-																		}
-																		flexDirection={
-																			isRTL ? "row-reverse" : "row"
-																		}
-																		textAlign={isRTL ? "right" : "left"}
-																	>
-																		{t("userDialog.ipLimitLabel")}
-																		<Tooltip
-																			hasArrow
-																			placement="top"
-																			label={t("userDialog.ipLimitHint")}
-																		>
-																			<chakra.span
-																				display="inline-flex"
-																				color="gray.400"
-																				cursor="help"
-																			>
-																				<QuestionMarkCircleIcon
-																					width={16}
-																					height={16}
-																				/>
-																			</chakra.span>
-																		</Tooltip>
-																	</FormLabel>
-																	<Controller
-																		control={form.control}
-																		name="ip_limit"
-																		rules={{
-																			validate: (value) => {
-																				if (
-																					value === null ||
-																					value === undefined
-																				) {
-																					return true;
-																				}
-																				if (
-																					typeof value !== "number" ||
-																					Number.isNaN(value)
-																				) {
-																					return t(
-																						"userDialog.ipLimitValidation",
-																					);
-																				}
-																				return value >= 0
-																					? true
-																					: t("userDialog.ipLimitValidation");
-																			},
-																		}}
-																		render={({ field }) => (
-																			<Input
-																				size="sm"
-																				borderRadius="6px"
-																				placeholder={t(
-																					"userDialog.ipLimitPlaceholder",
-																				)}
-																				value={
-																					typeof field.value === "number" &&
-																					field.value > 0
+																	{t("userDialog.dataLimit")}
+																</FormLabel>
+																<Controller
+																	control={form.control}
+																	name="data_limit"
+																	render={({ field }) => {
+																		return (
+																			<>
+																				{renderUnitInput({
+																					unit: DATA_UNIT,
+																					value: field.value
 																						? String(field.value)
-																						: ""
-																				}
-																				onChange={(event) => {
-																					const raw = event.target.value;
-																					if (
-																						!raw.trim() ||
-																						raw.trim() === "-"
-																					) {
-																						field.onChange(null);
-																						return;
+																						: "",
+																					onChange: field.onChange,
+																					disabled,
+																				})}
+																				{isEditing && remainingDataInfo && (
+																					<FormHelperText
+																						fontSize="xs"
+																						color="gray.500"
+																						textAlign={
+																							isRTL ? "right" : "left"
+																						}
+																					>
+																						{`${remainingDataInfo.label}: ${remainingDataInfo.value}`}
+																					</FormHelperText>
+																				)}
+																				<FormErrorMessage>
+																					{
+																						form.formState.errors.data_limit
+																							?.message
 																					}
-																					const parsed = Number(raw);
-																					if (Number.isNaN(parsed)) {
-																						return;
-																					}
-																					field.onChange(
-																						parsed < 0 ? 0 : Math.floor(parsed),
-																					);
-																				}}
-																				disabled={disabled}
-																				error={
-																					form.formState.errors.ip_limit
-																						?.message
-																				}
-																				dir="ltr"
-																				textAlign={isRTL ? "right" : "left"}
-																			/>
-																		)}
-																	/>
-																</FormControl>
-															</Stack>
+																				</FormErrorMessage>
+																			</>
+																		);
+																	}}
+																/>
+															</FormControl>
 
 															<Collapse
 																in={!!(dataLimit && dataLimit > 0)}
 																animateOpacity
 																style={{ width: "100%" }}
 															>
-																<FormControl height="66px">
+																<FormControl height="66px" mb={"10px"}>
 																	<FormLabel
 																		textAlign={isRTL ? "right" : "left"}
 																	>
@@ -2580,6 +2540,296 @@ export const UserDialog: FC<UserDialogProps> = () => {
 																		}}
 																	/>
 																</FormControl>
+															</Collapse>
+
+															<FormControl mb={"10px"} isInvalid={!!form.formState.errors.ip_limit?.message}>
+																<Flex
+																	alignItems="center"
+																	justifyContent="space-between"
+																	mb={2}
+																	dir={isRTL ? "rtl" : "ltr"}
+																>
+																	<FormLabel
+																		mb={0}
+																		display="flex"
+																		alignItems="center"
+																		gap={1.5}
+																		textAlign={isRTL ? "right" : "left"}
+																	>
+																		<Text as="span" fontWeight="medium" fontSize="sm">
+																			{form.watch("device_limit_type") === "hwid"
+																				? t("userDialog.hwidLimitLabel")
+																				: t("userDialog.ipLimitLabel")}
+																		</Text>
+																		<Tooltip
+																			hasArrow
+																			placement="top"
+																			label={
+																				form.watch("device_limit_type") === "hwid"
+																					? t("userDialog.hwidLimitHint")
+																					: t("userDialog.ipLimitHint")
+																			}
+																		>
+																			<chakra.span
+																				display="inline-flex"
+																				color="gray.400"
+																				cursor="help"
+																			>
+																				<QuestionMarkCircleIcon
+																					width={16}
+																					height={16}
+																				/>
+																			</chakra.span>
+																		</Tooltip>
+																	</FormLabel>
+
+																	<HStack
+																		spacing={0}
+																		bg={colorMode === "dark" ? "whiteAlpha.100" : "blackAlpha.100"}
+																		p="2px"
+																		borderRadius="md"
+																		borderWidth="1px"
+																		borderColor={
+																			colorMode === "dark"
+																				? "whiteAlpha.200"
+																				: "gray.200"
+																		}
+																	>
+																		<Button
+																			size="xs"
+																			h="20px"
+																			px={2}
+																			fontSize="2xs"
+																			borderRadius="sm"
+																			variant={form.watch("device_limit_type") !== "hwid" ? "solid" : "ghost"}
+																			colorScheme={form.watch("device_limit_type") !== "hwid" ? "primary" : "gray"}
+																			fontWeight={form.watch("device_limit_type") !== "hwid" ? "bold" : "normal"}
+																			isDisabled={disabled}
+																			onClick={(e) => {
+																				e.preventDefault();
+																				form.setValue("device_limit_type", "ip", { shouldDirty: true });
+																			}}
+																		>
+																			{t("userDialog.limitTypeIPShort")}
+																		</Button>
+																		<Button
+																			size="xs"
+																			h="20px"
+																			px={2}
+																			fontSize="2xs"
+																			borderRadius="sm"
+																			variant={form.watch("device_limit_type") === "hwid" ? "solid" : "ghost"}
+																			colorScheme={form.watch("device_limit_type") === "hwid" ? "primary" : "gray"}
+																			fontWeight={form.watch("device_limit_type") === "hwid" ? "bold" : "normal"}
+																			isDisabled={disabled}
+																			onClick={(e) => {
+																				e.preventDefault();
+																				form.setValue("device_limit_type", "hwid", { shouldDirty: true });
+																			}}
+																		>
+																			{t("userDialog.limitTypeHWIDShort")}
+																		</Button>
+																	</HStack>
+																</Flex>
+
+																<Controller
+																	control={form.control}
+																	name="ip_limit"
+																	rules={{
+																		validate: (value) => {
+																			if (
+																				value === null ||
+																				value === undefined
+																			) {
+																				return true;
+																			}
+																			if (
+																				typeof value !== "number" ||
+																				Number.isNaN(value)
+																			) {
+																				return t(
+																					"userDialog.ipLimitValidation",
+																				);
+																			}
+																			return value >= 0
+																				? true
+																				: t("userDialog.ipLimitValidation");
+																		},
+																	}}
+																	render={({ field }) => (
+																		<>
+																			{renderUnitInput({
+																				unit:
+																					form.watch("device_limit_type") === "hwid"
+																						? t("userDialog.deviceUnit")
+																						: t("userDialog.ipUnit"),
+																				value:
+																					typeof field.value === "number" &&
+																					field.value > 0
+																						? String(field.value)
+																						: "",
+																				placeholder: t("userDialog.remainingDataUnlimited"),
+																				onChange: (event) => {
+																					const raw = event.target.value;
+																					if (
+																						!raw.trim() ||
+																						raw.trim() === "-"
+																					) {
+																						field.onChange(null);
+																						return;
+																					}
+																					const parsed = Number(raw);
+																					if (Number.isNaN(parsed)) {
+																						return;
+																					}
+																					field.onChange(
+																						parsed < 0
+																							? 0
+																							: Math.floor(parsed),
+																					);
+																				},
+																				disabled,
+																			})}
+																			<FormHelperText
+																				fontSize="xs"
+																				color="gray.500"
+																				textAlign={
+																					isRTL ? "right" : "left"
+																				}
+																			>
+																				{form.watch("device_limit_type") === "hwid"
+																					? t("userDialog.hwidLimitHelper")
+																					: t("userDialog.ipLimitHelper")}
+																			</FormHelperText>
+																			<FormErrorMessage>
+																				{
+																					form.formState.errors.ip_limit
+																						?.message
+																				}
+																			</FormErrorMessage>
+																		</>
+																	)}
+																/>
+															</FormControl>
+
+															<Collapse
+																in={
+																	form.watch("device_limit_type") === "hwid" &&
+																	isEditing
+																}
+																animateOpacity
+																style={{ width: "100%" }}
+															>
+																<Box
+																	mb={3}
+																	p={3}
+																	borderRadius="md"
+																	bg={
+																		colorMode === "dark"
+																			? "whiteAlpha.50"
+																			: "gray.50"
+																	}
+																	borderWidth="1px"
+																	borderColor={
+																		colorMode === "dark"
+																			? "whiteAlpha.200"
+																			: "gray.200"
+																	}
+																>
+																	<Flex
+																		justify="space-between"
+																		align="center"
+																		mb={userHwids.length > 0 ? 2 : 0}
+																	>
+																		<HStack spacing={2}>
+																			<Text
+																				fontSize="xs"
+																				fontWeight="semibold"
+																			>
+																				{t("userDialog.registeredDevices")} (
+																				{userHwids.length})
+																			</Text>
+																			{loadingHwids && (
+																				<Spinner size="xs" />
+																			)}
+																		</HStack>
+																		<Button
+																			size="xs"
+																			colorScheme="red"
+																			variant="outline"
+																			onClick={handleResetHwids}
+																			isLoading={resettingHwids}
+																			isDisabled={userHwids.length === 0}
+																		>
+																			{t("userDialog.resetDevices")}
+																		</Button>
+																	</Flex>
+																	{userHwids.length === 0 ? (
+																		<Text fontSize="2xs" color="gray.500" mt={1}>
+																			{t("userDialog.noDevicesRegistered")}
+																		</Text>
+																	) : (
+																		<VStack
+																			align="stretch"
+																			spacing={1.5}
+																			maxH="130px"
+																			overflowY="auto"
+																			mt={2}
+																		>
+																			{userHwids.map((hw) => (
+																				<Flex
+																					key={hw.id}
+																					justify="space-between"
+																					align="center"
+																					p={2}
+																					borderRadius="sm"
+																					bg={
+																						colorMode === "dark"
+																							? "whiteAlpha.100"
+																							: "white"
+																					}
+																					fontSize="2xs"
+																				>
+																					<VStack
+																						align="start"
+																						spacing={0.5}
+																						maxW="70%"
+																						minW={0}
+																					>
+																						<Text
+																							fontWeight="semibold"
+																							fontFamily="mono"
+																							fontSize="xs"
+																							isTruncated
+																						>
+																							{hw.hwid}
+																						</Text>
+																						<Text
+																							color="gray.500"
+																							fontSize="2xs"
+																							isTruncated
+																						>
+																							{hw.user_agent || "Client"}
+																						</Text>
+																					</VStack>
+																					<Badge
+																						fontSize="2xs"
+																						colorScheme="blue"
+																						px={2}
+																						py={0.5}
+																						borderRadius="full"
+																					>
+																						{hw.last_seen_at
+																							? dayjs(
+																									hw.last_seen_at,
+																								).format("MM/DD HH:mm")
+																							: "-"}
+																					</Badge>
+																				</Flex>
+																			))}
+																		</VStack>
+																	)}
+																</Box>
 															</Collapse>
 
 															<FormControl

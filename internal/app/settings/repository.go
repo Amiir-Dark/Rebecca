@@ -201,6 +201,42 @@ func (r Repository) UpdateSubscriptionSettings(ctx context.Context, raw map[stri
 				remark = defaultSubscriptionPlaceholderRemark
 			}
 			add(key, remark)
+		case "subscription_announcement":
+			ann := strings.TrimSpace(rawStringDefault(value, ""))
+			if len(ann) > 200 {
+				ann = ann[:200]
+			}
+			add(key, ann)
+		case "happ_sub_info_color":
+			add(key, strings.ToLower(strings.TrimSpace(rawStringDefault(value, ""))))
+		case "happ_sub_info_button_text":
+			text := strings.TrimSpace(rawStringDefault(value, ""))
+			if len(text) > 25 {
+				text = text[:25]
+			}
+			add(key, text)
+		case "happ_sub_info_button_link":
+			add(key, strings.TrimSpace(rawStringDefault(value, "")))
+		case "happ_sub_expire":
+			add(key, rawBoolDefault(value, false))
+		case "happ_sub_expire_button_link":
+			add(key, strings.TrimSpace(rawStringDefault(value, "")))
+		case "happ_announcement_target_type":
+			targetType := strings.ToLower(strings.TrimSpace(rawStringDefault(value, "all")))
+			if targetType != "selected" {
+				targetType = "all"
+			}
+			add(key, targetType)
+		case "happ_announcement_target_users":
+			add(key, strings.TrimSpace(rawStringDefault(value, "")))
+		case "default_device_limit_type":
+			limType := strings.ToLower(strings.TrimSpace(rawStringDefault(value, "ip")))
+			if limType != "hwid" {
+				limType = "ip"
+			}
+			add(key, limType)
+		case "subscription_placeholder_enabled":
+			add(key, rawBoolDefault(value, false))
 		case "subscription_path":
 			add(key, normalizePath(rawStringDefault(value, "")))
 		case "subscription_aliases":
@@ -466,13 +502,24 @@ subscription_aliases,
 subscription_ports,
 COALESCE(client_routing_rules, '[]'),
 COALESCE(subscription_placeholder_enabled, 0),
-COALESCE(subscription_placeholder_remark, '')
+COALESCE(subscription_placeholder_remark, ''),
+COALESCE(subscription_announcement, ''),
+COALESCE(happ_sub_info_color, ''),
+COALESCE(happ_sub_info_button_text, ''),
+COALESCE(happ_sub_info_button_link, ''),
+COALESCE(happ_sub_expire, 0),
+COALESCE(happ_sub_expire_button_link, ''),
+COALESCE(happ_announcement_target_type, 'all'),
+COALESCE(happ_announcement_target_users, ''),
+COALESCE(default_device_limit_type, 'ip')
 FROM subscription_settings ORDER BY id DESC LIMIT 1`)
 	var result SubscriptionSettings
 	var customDir sql.NullString
 	var aliasesRaw, portsRaw, clientRoutingRulesRaw sql.NullString
 	var placeholderEnabled sql.NullBool
 	var placeholderRemark sql.NullString
+	var ann, infoColor, infoBtnText, infoBtnLink, expireBtnLink, targetType, targetUsers, defaultDeviceLimitType sql.NullString
+	var subExpire sql.NullBool
 	if err := row.Scan(
 		&result.SubscriptionURLPrefix,
 		&result.SubscriptionProfileTitle,
@@ -496,8 +543,21 @@ FROM subscription_settings ORDER BY id DESC LIMIT 1`)
 		&clientRoutingRulesRaw,
 		&placeholderEnabled,
 		&placeholderRemark,
+		&ann,
+		&infoColor,
+		&infoBtnText,
+		&infoBtnLink,
+		&subExpire,
+		&expireBtnLink,
+		&targetType,
+		&targetUsers,
+		&defaultDeviceLimitType,
 	); err != nil {
 		return SubscriptionSettings{}, err
+	}
+	result.DefaultDeviceLimitType = "ip"
+	if defaultDeviceLimitType.Valid && defaultDeviceLimitType.String == "hwid" {
+		result.DefaultDeviceLimitType = "hwid"
 	}
 	if customDir.Valid {
 		result.CustomTemplatesDirectory = &customDir.String
@@ -505,6 +565,29 @@ FROM subscription_settings ORDER BY id DESC LIMIT 1`)
 	result.SubscriptionPlaceholderEnabled = placeholderEnabled.Valid && placeholderEnabled.Bool
 	if placeholderRemark.Valid {
 		result.SubscriptionPlaceholderRemark = placeholderRemark.String
+	}
+	if ann.Valid {
+		result.SubscriptionAnnouncement = ann.String
+	}
+	if infoColor.Valid {
+		result.HappSubInfoColor = infoColor.String
+	}
+	if infoBtnText.Valid {
+		result.HappSubInfoButtonText = infoBtnText.String
+	}
+	if infoBtnLink.Valid {
+		result.HappSubInfoButtonLink = infoBtnLink.String
+	}
+	result.HappSubExpire = subExpire.Valid && subExpire.Bool
+	if expireBtnLink.Valid {
+		result.HappSubExpireButtonLink = expireBtnLink.String
+	}
+	result.HappAnnouncementTargetType = "all"
+	if targetType.Valid && targetType.String == "selected" {
+		result.HappAnnouncementTargetType = "selected"
+	}
+	if targetUsers.Valid {
+		result.HappAnnouncementTargetUsers = targetUsers.String
 	}
 	result.SubscriptionURLPrefix = normalizePrefix(result.SubscriptionURLPrefix)
 	result.SubscriptionSupportURL = normalizeSupportURL(result.SubscriptionSupportURL)
@@ -550,9 +633,18 @@ subscription_ports,
 client_routing_rules,
 subscription_placeholder_enabled,
 subscription_placeholder_remark,
+subscription_announcement,
+happ_sub_info_color,
+happ_sub_info_button_text,
+happ_sub_info_button_link,
+happ_sub_expire,
+happ_sub_expire_button_link,
+happ_announcement_target_type,
+happ_announcement_target_users,
+default_device_limit_type,
 created_at,
 updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		"",
 		defaultSubscriptionProfileTitle,
 		defaultSubscriptionSupportURL,
@@ -575,6 +667,15 @@ updated_at
 		defaultClientRoutingRules,
 		false,
 		defaultSubscriptionPlaceholderRemark,
+		"",
+		"",
+		"",
+		"",
+		false,
+		"",
+		"all",
+		"",
+		"ip",
 		now,
 		now,
 	)

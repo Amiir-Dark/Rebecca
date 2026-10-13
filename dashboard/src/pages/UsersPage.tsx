@@ -1,4 +1,5 @@
 import {
+	Box,
 	Button,
 	chakra,
 	Flex,
@@ -28,7 +29,7 @@ import {
 	PageLoadingSkeleton,
 	ResourceRefreshButton,
 } from "components/ui";
-import { UsersFilterBar } from "components/users";
+import { UsersFilterBar, UsersSummaryCards } from "components/users";
 import { fetchInbounds, useDashboard } from "contexts/DashboardContext";
 import useGetUser from "hooks/useGetUser";
 import {
@@ -353,72 +354,135 @@ export const UsersPage: FC = () => {
 	}
 
 	return (
-		<VStack
-			className="rb-users-section"
-			spacing={4}
-			align="stretch"
-			dir={isRTL ? "rtl" : "ltr"}
-		>
-			<UsersTable
-				toolbar={<UsersFilterBar />}
-				headerActions={
-					<HStack spacing={1}>
-						<ResourceRefreshButton
-							aria-label={t("refresh")}
-							label={t("refresh")}
-							icon={<ReloadIcon />}
-							onClick={() => {
-								refetchUsers(true);
-								void refreshOnlineUsers();
-							}}
-							isLoading={loading}
-						/>
-						<Menu placement={isRTL ? "bottom-start" : "bottom-end"} isLazy>
-							<MenuButton
-								as={Button}
-								size="sm"
-								variant="ghost"
-								rightIcon={<ChevronDownIcon width={14} />}
-								aria-label={t("usersTable.autoRefresh")}
-								px={2}
-							>
-								{autoRefreshInterval
-									? `${t("usersTable.autoRefresh")} · ${autoRefreshInterval / 1000}s`
-									: t("usersTable.autoRefreshOff")}
-							</MenuButton>
-							<Portal>
-								<MenuList
-									zIndex={1800}
-									minW="170px"
-									bg="panel.surface"
-									borderColor="panel.border"
-								>
-									<MenuItem
-										onClick={() => setAutoRefreshInterval(0)}
-										fontWeight={autoRefreshInterval === 0 ? "bold" : "normal"}
-									>
-										{t("usersTable.autoRefreshOff")}
-									</MenuItem>
-									{AUTO_REFRESH_INTERVALS.map((interval) => (
-										<MenuItem
-											key={interval}
-											onClick={() => setAutoRefreshInterval(interval)}
-											fontWeight={
-												autoRefreshInterval === interval ? "bold" : "normal"
-											}
-										>
-											{t("usersTable.autoRefreshEvery", {
-												seconds: interval / 1000,
-											})}
-										</MenuItem>
-									))}
-								</MenuList>
-							</Portal>
-						</Menu>
-					</HStack>
-				}
+		<Box position="relative" w="full">
+			{/* Ambient Aurora Top Glow matching Dashboard */}
+			<Box
+				position="absolute"
+				top="-90px"
+				left="10%"
+				right="10%"
+				height="280px"
+				bg="radial-gradient(ellipse 65% 55% at 50% 0%, var(--rb-panel-accent-glow) 0%, transparent 72%)"
+				opacity={0.35}
+				filter="blur(55px)"
+				pointerEvents="none"
+				zIndex={0}
 			/>
-			<Pagination />
+
+			<VStack
+				className="rb-users-section"
+				spacing={5}
+				align="stretch"
+				dir={isRTL ? "rtl" : "ltr"}
+				position="relative"
+				zIndex={1}
+			>
+				{/* Top Summary Resource Metric Cards */}
+				<UsersSummaryCards />
+
+				{/* Main Users Table Glassmorphic Shell */}
+				<Box
+					className="rb-users-table-shell"
+					position="relative"
+					bg="panel.surface"
+					background="linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.005) 100%), var(--chakra-colors-panel-surface)"
+					borderWidth="1px"
+					borderColor="panel.border"
+					borderRadius={{ base: "14px", sm: "16px", md: "20px" }}
+					p={{ base: 2.5, sm: 4, md: 5 }}
+					boxShadow="inset 0 1px 1px 0 rgba(255, 255, 255, 0.06), 0 8px 32px -6px rgba(0, 0, 0, 0.2)"
+					_before={{
+						content: '""',
+						position: "absolute",
+						top: 0,
+						left: "8%",
+						right: "8%",
+						height: "2px",
+						bg: "linear-gradient(90deg, transparent, var(--rb-panel-accent), var(--rb-panel-accent-glow), transparent)",
+						opacity: 0.85,
+					}}
+				>
+					<UsersTable
+						toolbar={<UsersFilterBar />}
+						headerActions={
+							<HStack spacing={1.5}>
+								<ResourceRefreshButton
+									aria-label={t("refresh")}
+									label={t("refresh")}
+									icon={<ReloadIcon />}
+									onClick={() => {
+										refetchUsers(true);
+										void refreshOnlineUsers();
+									}}
+									isLoading={loading}
+								/>
+								<Menu placement={isRTL ? "bottom-start" : "bottom-end"} isLazy>
+									<MenuButton
+										as={Button}
+										size="sm"
+										variant="ghost"
+										rightIcon={<ChevronDownIcon width={14} />}
+										aria-label={t("usersTable.autoRefresh")}
+										borderRadius="full"
+										borderWidth="1px"
+										borderColor="panel.border"
+										bg="panel.surface"
+										px={3}
+										fontSize="xs"
+										fontWeight="600"
+										transition="all 0.2s ease"
+										_hover={{
+											borderColor: "var(--rb-panel-accent-glow)",
+											bg: "var(--rb-panel-accent-soft)",
+											color: "var(--rb-panel-accent)",
+										}}
+									>
+										{autoRefreshInterval
+											? `${t("usersTable.autoRefresh")} · ${autoRefreshInterval / 1000}s`
+											: t("usersTable.autoRefreshOff")}
+									</MenuButton>
+									<Portal>
+										<MenuList
+											zIndex={1800}
+											minW="180px"
+											bg="panel.surface"
+											borderColor="panel.border"
+											borderRadius="14px"
+											boxShadow="inset 0 1px 1px 0 rgba(255, 255, 255, 0.08), 0 16px 40px rgba(0, 0, 0, 0.6)"
+											p={1.5}
+										>
+											<MenuItem
+												onClick={() => setAutoRefreshInterval(0)}
+												fontWeight={autoRefreshInterval === 0 ? "bold" : "normal"}
+												borderRadius="8px"
+											>
+												{t("usersTable.autoRefreshOff")}
+											</MenuItem>
+											{AUTO_REFRESH_INTERVALS.map((interval) => (
+												<MenuItem
+													key={interval}
+													onClick={() => setAutoRefreshInterval(interval)}
+													fontWeight={
+														autoRefreshInterval === interval ? "bold" : "normal"
+													}
+													borderRadius="8px"
+												>
+													{t("usersTable.autoRefreshEvery", {
+														seconds: interval / 1000,
+													})}
+												</MenuItem>
+											))}
+										</MenuList>
+									</Portal>
+								</Menu>
+							</HStack>
+						}
+					/>
+				</Box>
+
+				<Pagination />
+			</VStack>
+
 			{isUserDialogOpen && (
 				<Suspense fallback={null}>
 					<UserDialog />
@@ -436,7 +500,7 @@ export const UsersPage: FC = () => {
 					<UserQuickEditModal />
 				</Suspense>
 			)}
-		</VStack>
+		</Box>
 	);
 };
 

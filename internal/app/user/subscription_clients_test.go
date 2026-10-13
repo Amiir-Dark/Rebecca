@@ -785,12 +785,14 @@ func newSubscriptionClientTestService(t *testing.T) (Service, string) {
 			on_hold_expire_duration BIGINT NULL,
 			on_hold_timeout DATETIME NULL,
 			ip_limit INTEGER DEFAULT 0,
+			device_limit_type TEXT NOT NULL DEFAULT 'ip',
 			auto_delete_in_days INTEGER NULL,
 			subscription_token TEXT NULL,
 			service_id INTEGER NULL,
 			admin_id INTEGER NULL,
 			sub_revoked_at DATETIME NULL
 		)`,
+		`CREATE TABLE user_hwids (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, hwid TEXT NOT NULL, user_agent TEXT, last_seen_at DATETIME NOT NULL, created_at DATETIME NOT NULL)`,
 		`CREATE TABLE user_presence (user_id INTEGER PRIMARY KEY, online_at DATETIME NOT NULL)`,
 		`CREATE TABLE user_subscription_access (user_id INTEGER PRIMARY KEY, updated_at DATETIME NOT NULL, user_agent TEXT NULL)`,
 		`CREATE TABLE user_usage_logs (

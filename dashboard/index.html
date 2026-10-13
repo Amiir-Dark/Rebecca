@@ -60,8 +60,22 @@
           if (themeColor) {
             themeColor.setAttribute(
               "content",
-              mode === "light" ? "#f4f5f7" : "#101010"
+              mode === "light" ? "#f4f5f7" : "#0a0c10"
             );
+          var storedAccent = localStorage.getItem("rb-accent") || "blue";
+          var accentMap = {
+            crimson: "#e0003c",
+            blue: "#2563eb",
+            green: "#16a34a",
+            purple: "#7c3aed",
+            orange: "#ea580c"
+          };
+          var accentColor = accentMap[storedAccent] || storedAccent;
+          if (accentColor && accentColor.startsWith("#")) {
+            root.style.setProperty("--rb-panel-accent", accentColor);
+            root.style.setProperty("--rb-panel-accent-soft", "color-mix(in srgb, " + accentColor + " 14%, transparent)");
+            root.style.setProperty("--rb-panel-accent-glow", "color-mix(in srgb, " + accentColor + " 30%, transparent)");
+            root.style.setProperty("--rb-panel-accent-subtle", "color-mix(in srgb, " + accentColor + " 8%, transparent)");
           }
         } catch (error) {}
       })();

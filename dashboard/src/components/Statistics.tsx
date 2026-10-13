@@ -41,6 +41,7 @@ import {
 	type ReactNode,
 	Suspense,
 	useEffect,
+	useId,
 	useMemo,
 	useRef,
 	useState,
@@ -952,12 +953,205 @@ const average = (values: number[]) =>
 		: 0;
 const peak = (values: number[]) => (values.length ? Math.max(...values) : 0);
 
+const DonutGauge: FC<{
+	total: number;
+	active: number;
+	label?: string;
+	size?: number;
+}> = ({ total, active, label = "TOTAL", size = 110 }) => {
+	const strokeWidth = 9;
+	const radius = (size - strokeWidth) / 2;
+	const circumference = 2 * Math.PI * radius;
+	const percent = total > 0 ? Math.min(100, Math.max(0, (active / total) * 100)) : 0;
+	const strokeDashoffset = circumference - (percent / 100) * circumference;
+
+	return (
+		<Box
+			position="relative"
+			w={`${size}px`}
+			h={`${size}px`}
+			display="flex"
+			alignItems="center"
+			justifyContent="center"
+			flexShrink={0}
+		>
+			<Box
+				position="absolute"
+				w={`${size * 0.65}px`}
+				h={`${size * 0.65}px`}
+				borderRadius="full"
+				bg="var(--rb-panel-accent-soft)"
+				filter="blur(14px)"
+				opacity={0.65}
+				pointerEvents="none"
+			/>
+			<svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+				<defs>
+					<linearGradient id="donutGaugeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+						<stop offset="0%" stopColor="var(--rb-panel-accent)" />
+						<stop offset="100%" stopColor="var(--rb-panel-accent-hover)" />
+					</linearGradient>
+				</defs>
+				<circle
+					cx={size / 2}
+					cy={size / 2}
+					r={radius}
+					stroke="rgba(255, 255, 255, 0.08)"
+					strokeWidth={strokeWidth}
+					fill="none"
+				/>
+				<circle
+					cx={size / 2}
+					cy={size / 2}
+					r={radius}
+					stroke="url(#donutGaugeGrad)"
+					strokeWidth={strokeWidth}
+					fill="none"
+					strokeDasharray={circumference}
+					strokeDashoffset={strokeDashoffset}
+					strokeLinecap="round"
+					style={{
+						transition: "stroke-dashoffset 1s cubic-bezier(0.16, 1, 0.3, 1)",
+						filter:
+							"drop-shadow(0 0 10px var(--rb-panel-accent-glow)) drop-shadow(0 0 4px var(--rb-panel-accent))",
+					}}
+				/>
+			</svg>
+			<VStack spacing={0} position="absolute" inset={0} justify="center" align="center" pointerEvents="none">
+				<Text
+					fontSize={{ base: "20px", sm: "22px" }}
+					fontWeight="800"
+					color="panel.text"
+					lineHeight="1.1"
+					dir="ltr"
+					sx={{ fontVariantNumeric: "tabular-nums" }}
+				>
+					{total}
+				</Text>
+				<Text
+					fontSize="9px"
+					fontWeight="700"
+					letterSpacing="0.08em"
+					color="panel.textMuted"
+					textTransform="uppercase"
+				>
+					{label}
+				</Text>
+			</VStack>
+		</Box>
+	);
+};
+
+const RadialProgressRing: FC<{
+	percent: number;
+	size?: number;
+	strokeWidth?: number;
+	id: string;
+	criticalColor?: string;
+}> = ({
+	percent,
+	size = 54,
+	strokeWidth = 5,
+	id,
+	criticalColor,
+}) => {
+	const safe = clampPercent(percent);
+	const radius = (size - strokeWidth) / 2;
+	const circumference = 2 * Math.PI * radius;
+	const strokeDashoffset = circumference - (safe / 100) * circumference;
+
+	const isCritical = safe >= 90;
+	const isWarning = safe >= 75 && !isCritical;
+
+	const gradStart = criticalColor || (isCritical ? "#ef4444" : isWarning ? "#f59e0b" : "var(--rb-panel-accent)");
+	const gradEnd = isCritical ? "#f87171" : isWarning ? "#fbbf24" : "var(--rb-panel-accent-hover)";
+	const glowColor = isCritical
+		? "rgba(239, 68, 68, 0.45)"
+		: isWarning
+			? "rgba(245, 158, 11, 0.45)"
+			: "var(--rb-panel-accent-glow)";
+
+	return (
+		<Box
+			position="relative"
+			w={`${size}px`}
+			h={`${size}px`}
+			display="flex"
+			alignItems="center"
+			justifyContent="center"
+			flexShrink={0}
+		>
+			<Box
+				position="absolute"
+				w={`${size * 0.7}px`}
+				h={`${size * 0.7}px`}
+				borderRadius="full"
+				bg={glowColor}
+				filter="blur(8px)"
+				opacity={0.35}
+				pointerEvents="none"
+			/>
+			<svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+				<defs>
+					<linearGradient id={`radialGrad-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+						<stop offset="0%" stopColor={gradStart} />
+						<stop offset="100%" stopColor={gradEnd} />
+					</linearGradient>
+				</defs>
+				<circle
+					cx={size / 2}
+					cy={size / 2}
+					r={radius}
+					stroke="rgba(255, 255, 255, 0.08)"
+					strokeWidth={strokeWidth}
+					fill="none"
+				/>
+				<circle
+					cx={size / 2}
+					cy={size / 2}
+					r={radius}
+					stroke={`url(#radialGrad-${id})`}
+					strokeWidth={strokeWidth}
+					fill="none"
+					strokeDasharray={circumference}
+					strokeDashoffset={strokeDashoffset}
+					strokeLinecap="round"
+					style={{
+						transition: "stroke-dashoffset 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
+						filter: `drop-shadow(0 0 6px ${glowColor}) drop-shadow(0 0 2px ${gradStart})`,
+					}}
+				/>
+			</svg>
+			<Flex
+				position="absolute"
+				inset={0}
+				align="center"
+				justify="center"
+				pointerEvents="none"
+				direction="column"
+			>
+				<Text
+					fontSize={{ base: "11px", sm: "11.5px" }}
+					fontWeight="800"
+					color="panel.text"
+					dir="ltr"
+					sx={{ fontVariantNumeric: "tabular-nums" }}
+					lineHeight="1"
+				>
+					{Math.round(safe)}%
+				</Text>
+			</Flex>
+		</Box>
+	);
+};
+
 const ResourceCard: FC<{
 	label: string;
 	icon: ReactNode;
 	value: string;
 	totalValue?: string;
 	percent: number;
+	badgeText?: string;
 	metaUnit?: string;
 	metaValue?: string | number;
 	subMeta?: ReactNode;
@@ -972,6 +1166,7 @@ const ResourceCard: FC<{
 	value,
 	totalValue,
 	percent,
+	badgeText,
 	metaUnit,
 	metaValue,
 	subMeta,
@@ -981,7 +1176,8 @@ const ResourceCard: FC<{
 	historyLabel,
 	isRTL = false,
 }) => {
-	const { colorMode } = useColorMode();
+	const rawId = useId();
+	const ringId = useMemo(() => rawId.replace(/[^a-zA-Z0-9]/g, ""), [rawId]);
 	const safe = clampPercent(percent);
 	const accent = "var(--rb-panel-accent)";
 	const criticalColor = safe >= 90 ? "#ef4444" : safe >= 75 ? "#f59e0b" : accent;
@@ -990,211 +1186,212 @@ const ResourceCard: FC<{
 		<Box
 			role="group"
 			bg="panel.surface"
+			background="linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, rgba(255, 255, 255, 0.005) 100%), var(--chakra-colors-panel-surface)"
+			backdropFilter="blur(16px)"
 			borderWidth="1px"
 			borderColor="panel.border"
-			borderRadius="20px"
-			p={{ base: 4, sm: 5 }}
+			borderRadius={{ base: "14px", sm: "16px", md: "20px" }}
+			p={{ base: 2.5, sm: 3.5, md: 5 }}
 			position="relative"
 			overflow="hidden"
 			display="flex"
 			flexDirection="column"
 			justifyContent="space-between"
-			boxShadow="inset 0 1px 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px -6px rgba(0, 0, 0, 0.12)"
-			transition="border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease"
+			boxShadow="inset 0 1px 1px 0 rgba(255, 255, 255, 0.06), 0 8px 24px -6px rgba(0, 0, 0, 0.16)"
+			transition="all 0.35s cubic-bezier(0.16, 1, 0.3, 1)"
+			_before={{
+				content: '""',
+				position: "absolute",
+				top: 0,
+				left: "8%",
+				right: "8%",
+				height: "2px",
+				bg: "linear-gradient(90deg, transparent, var(--rb-panel-accent), var(--rb-panel-accent-glow), transparent)",
+				opacity: 0.85,
+				transition: "opacity 0.35s ease",
+			}}
 			_hover={{
 				md: {
-					borderColor: "panel.borderStrong",
+					transform: "translateY(-4px)",
+					borderColor: "var(--rb-panel-accent-glow)",
 					bg: "panel.elevated",
-					boxShadow: "inset 0 1px 1px 0 rgba(255, 255, 255, 0.08), 0 12px 32px -4px rgba(0, 0, 0, 0.22)",
+					boxShadow:
+						"0 16px 36px -6px rgba(0, 0, 0, 0.45), 0 0 26px -4px var(--rb-panel-accent-glow), inset 0 1px 1px 0 rgba(255, 255, 255, 0.09)",
 				},
 			}}
 		>
 			<Box>
-				<Flex justify="space-between" align="center" mb={3}>
-					<HStack spacing={2.5} align="center">
+				<Flex justify="space-between" align="center" mb={{ base: 2, sm: 2.5, md: 3 }}>
+					<HStack spacing={{ base: 1.5, sm: 2.5 }} align="center" minW={0}>
 						<Flex
-							w="32px"
-							h="32px"
+							w={{ base: "26px", sm: "28px", md: "32px" }}
+							h={{ base: "26px", sm: "28px", md: "32px" }}
 							align="center"
 							justify="center"
-							borderRadius="9px"
-							bg="panel.elevated"
-							color="panel.textSecondary"
+							borderRadius={{ base: "7px", sm: "8px", md: "9px" }}
+							bg="var(--rb-panel-accent-soft)"
+							borderWidth="1px"
+							borderColor="var(--rb-panel-accent-glow)"
+							color="var(--rb-panel-accent)"
+							boxShadow="0 0 12px -2px var(--rb-panel-accent-glow)"
 							flexShrink={0}
+							transition="all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+							_groupHover={{
+								transform: "scale(1.1)",
+								boxShadow: "0 0 18px var(--rb-panel-accent-glow)",
+							}}
 						>
 							{icon}
 						</Flex>
-						<Text fontSize="13px" fontWeight="600" color="panel.textSecondary" noOfLines={1}>
+						<Text fontSize={{ base: "11px", sm: "12px", md: "13px" }} fontWeight="600" color="panel.textSecondary" noOfLines={1}>
 							{label}
 						</Text>
 					</HStack>
 					{onHistory && (
 						<Button
 							size="xs"
-							h="22px"
-							px={2}
+							h={{ base: "20px", sm: "22px" }}
+							minW={{ base: "20px", sm: "auto" }}
+							px={{ base: 1.5, sm: 2 }}
 							fontSize="11px"
 							variant="ghost"
 							borderRadius="full"
-							bg="panel.elevated"
-							color={colorMode === "light" ? "panel.textSecondary" : "panel.textMuted"}
-							fontWeight={colorMode === "light" ? "600" : "500"}
-							transition="all 0.2s ease"
-							_groupHover={{
-								md: {
-									bg: "panel.surface",
-									color: colorMode === "light" ? "panel.text" : "panel.textSecondary",
-								},
-							}}
+							bg="var(--rb-panel-accent-soft)"
+							borderWidth="1px"
+							borderColor="var(--rb-panel-accent-glow)"
+							color="var(--rb-panel-accent)"
+							boxShadow="0 0 8px -2px var(--rb-panel-accent-glow)"
+							fontWeight="600"
+							transition="all 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
 							_hover={{
-								md: {
-									bg: "panel.border !important",
-									color: "panel.text !important",
-								},
+								bg: "var(--rb-panel-accent-glow)",
+								color: "panel.text",
+								transform: "scale(1.05)",
+								boxShadow: "0 0 14px var(--rb-panel-accent-glow)",
 							}}
 							_active={{
-								bg: "panel.borderStrong !important",
+								transform: "scale(0.96)",
 							}}
 							_focusVisible={{
 								outline: "2px solid var(--rb-panel-accent)",
 								outlineOffset: "2px",
 							}}
-							position="relative"
-							_after={{
-								content: '""',
-								position: "absolute",
-								top: "-10px",
-								bottom: "-10px",
-								left: "-10px",
-								right: "-10px",
-							}}
 							onClick={onHistory}
+							title={historyLabel}
 						>
-							{historyLabel}
+							<Box as={ClockIcon} w="12px" h="12px" display={{ base: "block", sm: "none" }} />
+							<Text as="span" display={{ base: "none", sm: "inline" }}>{historyLabel}</Text>
 						</Button>
 					)}
 				</Flex>
 
-				<Flex align="baseline" gap={1.5} mb={1} wrap="nowrap" justify="flex-start">
-					{totalValue ? (
-						<Flex
-							dir="ltr"
-							align="baseline"
-							gap={1.5}
-							sx={{ unicodeBidi: "isolate" }}
-						>
+				<Flex align="center" justify="space-between" gap={2} my={{ base: 1, sm: 1.5 }}>
+					<Box minW={0} flex="1">
+						<Flex align="baseline" gap={1.5} flexWrap="wrap">
 							<Text
-								fontSize={{ base: "20px", sm: "22px" }}
+								fontSize={{ base: "17px", sm: "19px", md: "22px" }}
 								fontWeight="800"
 								color="panel.text"
 								letterSpacing="-0.02em"
-								lineHeight="1.1"
-								sx={{ fontVariantNumeric: "tabular-nums" }}
-							>
-								{value}
-							</Text>
-							<Text
-								fontSize="13px"
-								fontWeight="600"
-								color="panel.textMuted"
-								sx={{ fontVariantNumeric: "tabular-nums" }}
-							>
-								/ {totalValue}
-							</Text>
-						</Flex>
-					) : (
-						<Flex align="baseline" gap={1.5} wrap="wrap">
-							<Text
-								fontSize={{ base: "20px", sm: "22px" }}
-								fontWeight="800"
-								color="panel.text"
-								letterSpacing="-0.02em"
-								lineHeight="1.1"
+								lineHeight="1.15"
 								dir="ltr"
 								sx={{ fontVariantNumeric: "tabular-nums", unicodeBidi: "isolate" }}
+								noOfLines={1}
 							>
 								{value}
 							</Text>
-							{metaValue !== undefined && metaUnit && (
-								<Flex
-									align="center"
-									dir={isRTL ? "rtl" : "ltr"}
-									gap={1}
-									sx={{ unicodeBidi: "isolate" }}
+							<Box
+								as="span"
+								display="inline-block"
+								w="5px"
+								h="5px"
+								borderRadius="full"
+								bg={criticalColor}
+								boxShadow={`0 0 8px ${criticalColor}`}
+								alignSelf="center"
+								sx={{
+									animation: "pulseBeacon 2.6s ease-in-out infinite",
+									"@keyframes pulseBeacon": {
+										"0%, 100%": { opacity: 0.5, transform: "scale(0.9)" },
+										"50%": { opacity: 1, transform: "scale(1.3)", boxShadow: `0 0 12px ${criticalColor}` },
+									},
+								}}
+							/>
+							{totalValue && (
+								<Text
+									fontSize={{ base: "10.5px", sm: "11px", md: "12px" }}
+									fontWeight="600"
+									color="panel.textMuted"
+									dir="ltr"
+									sx={{ fontVariantNumeric: "tabular-nums", unicodeBidi: "isolate" }}
+									noOfLines={1}
 								>
-									<Text
-										fontSize="13px"
-										fontWeight="600"
-										color="panel.textMuted"
-										dir="ltr"
-										sx={{ fontVariantNumeric: "tabular-nums", unicodeBidi: "isolate" }}
-									>
-										{metaValue}
-									</Text>
-									<Text fontSize="12px" fontWeight="600" color="panel.textMuted">
-										{metaUnit}
-									</Text>
-								</Flex>
+									/ {totalValue}
+								</Text>
 							)}
 						</Flex>
-					)}
-				</Flex>
-				{subMeta && (
-					<Box mt={0.5}>
-						{subMeta}
+
+						{badgeText && (
+							<Flex align="center" mt={1}>
+								<Flex
+									align="center"
+									gap={1}
+									px={1.5}
+									py={0.4}
+									borderRadius="full"
+									bg="var(--rb-panel-accent-soft)"
+									borderWidth="1px"
+									borderColor="var(--rb-panel-accent-glow)"
+									color="var(--rb-panel-accent)"
+									boxShadow="0 0 8px -2px var(--rb-panel-accent-glow)"
+									fontSize={{ base: "9.5px", sm: "10px", md: "10.5px" }}
+									fontWeight="700"
+									flexShrink={0}
+									sx={{ fontVariantNumeric: "tabular-nums", unicodeBidi: "isolate" }}
+								>
+									<Box
+										w="4px"
+										h="4px"
+										borderRadius="full"
+										bg="var(--rb-panel-accent)"
+										boxShadow="0 0 6px var(--rb-panel-accent)"
+									/>
+									<Text as="span">{badgeText}</Text>
+								</Flex>
+							</Flex>
+						)}
+
+						{subMeta && (
+							<Box mt={1} fontSize={{ base: "9.5px", sm: "10px" }}>
+								{subMeta}
+							</Box>
+						)}
 					</Box>
-				)}
+
+					<RadialProgressRing
+						percent={safe}
+						id={ringId}
+						size={56}
+						criticalColor={safe >= 75 ? criticalColor : undefined}
+					/>
+				</Flex>
 			</Box>
 
-			<Box mt={3}>
-				<Flex justify="space-between" align="center" mb={1.5}>
-					<Text
-						fontSize="11px"
-						fontWeight="600"
-						color="panel.textMuted"
-						dir="ltr"
-						sx={{ unicodeBidi: "isolate", fontVariantNumeric: "tabular-nums" }}
-					>
-						{formatPercent(safe, false)}
-					</Text>
-				</Flex>
-				<Progress
-					value={safe}
-					size="xs"
-					borderRadius="full"
-					bg="panel.elevated"
-					transition="background-color 0.25s ease"
-					_hover={{
-						md: {
-							bg: "panel.surface",
-						},
-					}}
-					_groupHover={{
-						md: {
-							bg: "panel.surface",
-						},
-					}}
-					sx={{
-						"& > div": {
-							bg: criticalColor,
-							transition: "width 0.6s ease, background-color 0.4s ease",
-							borderRadius: "full",
-						},
-					}}
-				/>
+			<Box mt={{ base: 2, sm: 2.5 }} pt={1.5} borderTop="1px solid" borderColor="rgba(255, 255, 255, 0.05)">
 				{(footerLeft || footerRight) && (
 					<Flex
 						justify="space-between"
-						align="center"
-						mt={2}
-						fontSize="11px"
+						align={{ base: "flex-start", sm: "center" }}
+						direction={{ base: "column", xs: "row", sm: "row" }}
+						gap={{ base: 0.5, sm: 2 }}
+						fontSize={{ base: "9.5px", sm: "10.5px", md: "11px" }}
 						fontWeight="500"
 						color="panel.textMuted"
 						dir={isRTL ? "rtl" : "ltr"}
 						sx={{ unicodeBidi: "isolate", fontVariantNumeric: "tabular-nums" }}
 					>
-						<Text noOfLines={1}>{footerLeft}</Text>
-						<Text noOfLines={1}>{footerRight}</Text>
+						{footerLeft && <Text noOfLines={1}>{footerLeft}</Text>}
+						{footerRight && <Text noOfLines={1}>{footerRight}</Text>}
 					</Flex>
 				)}
 			</Box>
@@ -1310,42 +1507,58 @@ const SectionCard: FC<{
 	<Box
 		role={roleGroup ? "group" : undefined}
 		bg="panel.surface"
+		background="linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.003) 100%), var(--chakra-colors-panel-surface)"
+		backdropFilter="blur(16px)"
 		borderWidth="1px"
 		borderColor="panel.border"
-		borderRadius="20px"
+		borderRadius={{ base: "14px", sm: "16px", md: "20px" }}
+		position="relative"
 		overflow="hidden"
-		boxShadow="inset 0 1px 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px -6px rgba(0, 0, 0, 0.12)"
-		transition="border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease"
+		boxShadow="inset 0 1px 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px -6px rgba(0, 0, 0, 0.14)"
+		transition="all 0.35s cubic-bezier(0.16, 1, 0.3, 1)"
+		_before={{
+			content: '""',
+			position: "absolute",
+			top: 0,
+			left: "8%",
+			right: "8%",
+			height: "2px",
+			bg: "linear-gradient(90deg, transparent, var(--rb-panel-accent), var(--rb-panel-accent-glow), transparent)",
+			opacity: 0.85,
+			transition: "opacity 0.35s ease",
+		}}
 		_hover={
 			noHover
 				? undefined
 				: {
 						md: {
-							borderColor: "panel.borderStrong",
+							transform: "translateY(-3px)",
+							borderColor: "var(--rb-panel-accent-glow)",
 							bg: "panel.elevated",
-							boxShadow: "inset 0 1px 1px 0 rgba(255, 255, 255, 0.08), 0 12px 32px -4px rgba(0, 0, 0, 0.22)",
+							boxShadow:
+								"0 14px 32px -6px rgba(0, 0, 0, 0.38), 0 0 22px -5px var(--rb-panel-accent-glow), inset 0 1px 1px 0 rgba(255, 255, 255, 0.08)",
 						},
 					}
 		}
 	>
 		{(title || action) && (
 			<Flex
-				px={{ base: 4, sm: 5, md: 6 }}
-				py={3.5}
+				px={{ base: 3, sm: 4, md: 6 }}
+				py={{ base: 2.5, sm: 3, md: 3.5 }}
 				align="center"
 				justify="space-between"
 				borderBottomWidth="1px"
 				borderColor="panel.border"
 			>
 				{title && (
-					<Text fontSize="13px" fontWeight="700" color="panel.text" letterSpacing="-0.01em">
+					<Text fontSize={{ base: "12px", sm: "13px" }} fontWeight="700" color="panel.text" letterSpacing="-0.01em">
 						{title}
 					</Text>
 				)}
 				{action}
 			</Flex>
 		)}
-		<Box px={{ base: 4, sm: 5, md: 6 }} py={4}>
+		<Box px={{ base: 3, sm: 4, md: 6 }} py={{ base: 3, sm: 3.5, md: 4 }}>
 			{children}
 		</Box>
 	</Box>
@@ -1406,16 +1619,67 @@ const SpeedItem: FC<{
 	icon: ReactNode;
 	label: string;
 	value: string;
-}> = ({ icon, label, value }) => {
+	direction?: "in" | "out";
+}> = ({ icon, label, value, direction = "in" }) => {
+	const isIncoming = direction === "in";
+	const pulseColor = isIncoming ? "#10b981" : "#38bdf8";
+
 	return (
-		<Flex align="center" justify="space-between" gap={3}>
+		<Flex
+			align="center"
+			justify="space-between"
+			gap={3}
+			p={{ base: 1.5, sm: 2 }}
+			borderRadius="12px"
+			borderWidth="1px"
+			borderColor="transparent"
+			transition="all 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
+			_hover={{
+				bg: "var(--rb-panel-accent-subtle)",
+				borderColor: "var(--rb-panel-accent-soft)",
+				transform: "translateX(3px)",
+			}}
+		>
 			<HStack spacing={2.5} color="panel.textMuted">
-				<Flex w="28px" h="28px" align="center" justify="center" borderRadius="8px" bg="panel.elevated" flexShrink={0}>
+				<Flex
+					w="30px"
+					h="30px"
+					align="center"
+					justify="center"
+					borderRadius="9px"
+					bg={isIncoming ? "rgba(16, 185, 129, 0.12)" : "rgba(56, 189, 248, 0.12)"}
+					color={isIncoming ? "#10b981" : "#38bdf8"}
+					borderWidth="1px"
+					borderColor={isIncoming ? "rgba(16, 185, 129, 0.25)" : "rgba(56, 189, 248, 0.25)"}
+					boxShadow={isIncoming ? "0 0 10px rgba(16, 185, 129, 0.2)" : "0 0 10px rgba(56, 189, 248, 0.2)"}
+					flexShrink={0}
+					transition="all 0.25s ease"
+					_groupHover={{
+						transform: "scale(1.08)",
+						boxShadow: isIncoming ? "0 0 16px rgba(16, 185, 129, 0.4)" : "0 0 16px rgba(56, 189, 248, 0.4)",
+					}}
+				>
 					{icon}
 				</Flex>
-				<Text fontSize="13px" fontWeight="600" color="panel.textSecondary">
-					{label}
-				</Text>
+				<HStack spacing={2}>
+					<Text fontSize="13px" fontWeight="600" color="panel.textSecondary">
+						{label}
+					</Text>
+					<Box
+						w="6px"
+						h="6px"
+						borderRadius="full"
+						bg={pulseColor}
+						boxShadow={`0 0 8px ${pulseColor}`}
+						sx={{
+							animation: "speedPulse 2s ease-in-out infinite",
+							"@keyframes speedPulse": {
+								"0%, 100%": { opacity: 0.4, transform: "scale(0.85)" },
+								"50%": { opacity: 1, transform: "scale(1.2)", boxShadow: `0 0 10px ${pulseColor}` },
+							},
+						}}
+					/>
+				</HStack>
 			</HStack>
 			<Text
 				fontSize="13px"
@@ -1580,8 +1844,8 @@ export const Statistics: FC<BoxProps> = (props) => {
 				</Flex>
 
 				<SimpleGrid
-					columns={{ base: 1, sm: 2, xl: 4 }}
-					gap={{ base: 3, md: 4 }}
+					columns={{ base: 2, md: 4 }}
+					gap={{ base: 2.5, sm: 3, md: 4 }}
 					sx={{
 						"@media screen and (min-width: 768px) and (max-width: 910px)": {
 							"body:not(:has([data-sidebar-collapsed='true'])) &": {
@@ -1595,41 +1859,38 @@ export const Statistics: FC<BoxProps> = (props) => {
 							key={i}
 							className="shimmer-box"
 							bg="panel.surface"
-							borderRadius="20px"
+							borderRadius={{ base: "14px", sm: "16px", md: "20px" }}
 							borderWidth="1px"
 							borderColor="panel.border"
-							p={{ base: 4, sm: 5 }}
+							p={{ base: 2.5, sm: 3.5, md: 5 }}
 							display="flex"
 							flexDirection="column"
 							justifyContent="space-between"
 							boxShadow="inset 0 1px 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px -6px rgba(0, 0, 0, 0.12)"
 						>
 							<Box>
-								<Flex justify="space-between" align="center" mb={3}>
-									<HStack spacing={2.5} align="center">
-										<Box w="32px" h="32px" borderRadius="9px" bg="panel.elevated" flexShrink={0} />
-										<Box w="90px" h="16px" borderRadius="md" bg="panel.elevated" />
+								<Flex justify="space-between" align="center" mb={{ base: 1.5, sm: 2.5, md: 3 }}>
+									<HStack spacing={{ base: 1.5, sm: 2.5 }} align="center">
+										<Box w={{ base: "26px", sm: "28px", md: "32px" }} h={{ base: "26px", sm: "28px", md: "32px" }} borderRadius={{ base: "7px", sm: "8px", md: "9px" }} bg="panel.elevated" flexShrink={0} />
+										<Box w={{ base: "50px", sm: "75px", md: "90px" }} h="14px" borderRadius="md" bg="panel.elevated" />
 									</HStack>
-									{i <= 2 && <Box w="75px" h="22px" borderRadius="full" bg="panel.elevated" />}
+									{i <= 2 && <Box w={{ base: "20px", sm: "40px", md: "60px" }} h="20px" borderRadius="full" bg="panel.elevated" />}
 								</Flex>
 								<Flex align="baseline" gap={1.5} mb={1}>
-									<Box w="65px" h="24px" borderRadius="md" bg="panel.elevated" />
-									<Box w={i === 1 ? "45px" : "60px"} h="16px" borderRadius="md" bg="panel.elevated" />
+									<Box w={{ base: "45px", sm: "55px", md: "65px" }} h={{ base: "18px", sm: "22px", md: "24px" }} borderRadius="md" bg="panel.elevated" />
+									<Box w={i === 1 ? "30px" : "45px"} h="14px" borderRadius="md" bg="panel.elevated" />
 								</Flex>
 								{i === 1 && (
 									<Box mt={0.5}>
-										<Box w="150px" h="14px" borderRadius="md" bg="panel.elevated" />
+										<Box w="100px" h="11px" borderRadius="md" bg="panel.elevated" />
 									</Box>
 								)}
 							</Box>
-							<Box mt={3}>
-								<Flex justify="space-between" align="center" mb={1.5}>
-									<Box w="35px" h="13px" borderRadius="sm" bg="panel.elevated" />
-								</Flex>
-								<Box w="full" h="4px" borderRadius="full" bg="panel.elevated" />
-								<Flex justify="space-between" align="center" mt={2.5} pt={2.5} borderTopWidth="1px" borderColor="panel.border">
-									<Box w="80px" h="14px" borderRadius="sm" bg="panel.elevated" />
-									<Box w="70px" h="14px" borderRadius="sm" bg="panel.elevated" />
+							<Box mt={{ base: 1.5, sm: 2.5, md: 3 }}>
+								<Box w="full" h={{ base: "3.5px", sm: "4px" }} borderRadius="full" bg="panel.elevated" />
+								<Flex justify="space-between" align="center" mt={{ base: 1.5, sm: 2 }} pt={{ base: 1, sm: 2 }} borderTopWidth="1px" borderColor="panel.border">
+									<Box w={{ base: "40px", sm: "65px", md: "80px" }} h="11px" borderRadius="sm" bg="panel.elevated" />
+									<Box w={{ base: "40px", sm: "60px", md: "70px" }} h="11px" borderRadius="sm" bg="panel.elevated" />
 								</Flex>
 							</Box>
 						</Box>
@@ -1920,6 +2181,21 @@ export const Statistics: FC<BoxProps> = (props) => {
 			spacing={{ base: 4, md: 5 }}
 			w="full"
 			dir={isRTL ? "rtl" : "ltr"}
+			position="relative"
+			_before={{
+				content: '""',
+				position: "absolute",
+				top: "-80px",
+				left: "8%",
+				right: "8%",
+				height: "320px",
+				background:
+					"radial-gradient(ellipse 65% 45% at 50% 0%, var(--rb-panel-accent-soft), transparent 70%)",
+				opacity: 0.65,
+				pointerEvents: "none",
+				zIndex: 0,
+				filter: "blur(48px)",
+			}}
 			{...props}
 		>
 			{canSeeGlobal && <SystemDiagnostics issues={criticalIssues} criticalOnly />}
@@ -1995,8 +2271,8 @@ export const Statistics: FC<BoxProps> = (props) => {
 			</Flex>
 
 			<SimpleGrid
-				columns={{ base: 1, sm: 2, xl: 4 }}
-				gap={{ base: 3, md: 4 }}
+				columns={{ base: 2, md: 4 }}
+				gap={{ base: 2.5, sm: 3, md: 4 }}
 				sx={{
 					"@media screen and (min-width: 768px) and (max-width: 910px)": {
 						"body:not(:has([data-sidebar-collapsed='true'])) &": {
@@ -2010,14 +2286,13 @@ export const Statistics: FC<BoxProps> = (props) => {
 					icon={<CpuChipIcon width={16} />}
 					value={formatPercent(systemData.cpu_usage, false)}
 					percent={systemData.cpu_usage}
-					metaValue={formatNumberValue(systemData.cpu_cores)}
-					metaUnit={t("dashboard.system.core")}
+					badgeText={`${systemData.cpu_cores} ${t("dashboard.system.core", "Core")}`}
 					subMeta={
 						systemData.load_avg && systemData.load_avg.length >= 3 ? (
 							<Flex
 								align="center"
-								gap={1.5}
-								fontSize="11px"
+								gap={1}
+								fontSize={{ base: "10px", sm: "11px" }}
 								fontWeight="500"
 								color="panel.textMuted"
 								dir={isRTL ? "rtl" : "ltr"}
@@ -2033,8 +2308,8 @@ export const Statistics: FC<BoxProps> = (props) => {
 							</Flex>
 						) : undefined
 					}
-					footerLeft={`${t("dashboard.system.average")}: ${formatPercent(average(systemData.cpu_history.map((e) => e.value)), isRTL)}`}
-					footerRight={`${t("dashboard.system.peak")}: ${formatPercent(peak(systemData.cpu_history.map((e) => e.value)), isRTL)}`}
+					footerLeft={`• ${t("dashboard.system.average")}: ${formatPercent(average(systemData.cpu_history.map((e) => e.value)), isRTL)}`}
+					footerRight={`• ${t("dashboard.system.peak")}: ${formatPercent(peak(systemData.cpu_history.map((e) => e.value)), isRTL)}`}
 					historyLabel={t("dashboard.system.viewHistory")}
 					isRTL={isRTL}
 					onHistory={() =>
@@ -2052,8 +2327,9 @@ export const Statistics: FC<BoxProps> = (props) => {
 					value={formatBytes(systemData.memory.current, 1)}
 					totalValue={formatBytes(systemData.memory.total, 1)}
 					percent={systemData.memory.percent}
-					footerLeft={`${t("dashboard.system.average")}: ${formatPercent(average(systemData.memory_history.map((e) => e.value)), isRTL)}`}
-					footerRight={`${t("dashboard.system.peak")}: ${formatPercent(peak(systemData.memory_history.map((e) => e.value)), isRTL)}`}
+					badgeText={formatPercent(systemData.memory.percent, false)}
+					footerLeft={`• ${t("dashboard.system.average")}: ${formatPercent(average(systemData.memory_history.map((e) => e.value)), isRTL)}`}
+					footerRight={`• ${t("dashboard.system.peak")}: ${formatPercent(peak(systemData.memory_history.map((e) => e.value)), isRTL)}`}
 					historyLabel={t("dashboard.system.viewHistory")}
 					isRTL={isRTL}
 					onHistory={() =>
@@ -2071,8 +2347,9 @@ export const Statistics: FC<BoxProps> = (props) => {
 					value={formatBytes(systemData.swap.current, 1)}
 					totalValue={formatBytes(systemData.swap.total, 1)}
 					percent={systemData.swap.percent}
-					footerLeft={`${t("dashboard.system.average")}: ${formatPercent(average(systemData.swap_history.map((e) => e.value)), isRTL)}`}
-					footerRight={`${t("dashboard.system.peak")}: ${formatPercent(peak(systemData.swap_history.map((e) => e.value)), isRTL)}`}
+					badgeText={formatPercent(systemData.swap.percent, false)}
+					footerLeft={`• ${t("dashboard.system.average")}: ${formatPercent(average(systemData.swap_history.map((e) => e.value)), isRTL)}`}
+					footerRight={`• ${t("dashboard.system.peak")}: ${formatPercent(peak(systemData.swap_history.map((e) => e.value)), isRTL)}`}
 					isRTL={isRTL}
 				/>
 				<ResourceCard
@@ -2081,8 +2358,9 @@ export const Statistics: FC<BoxProps> = (props) => {
 					value={formatBytes(systemData.disk.current, 1)}
 					totalValue={formatBytes(systemData.disk.total, 1)}
 					percent={systemData.disk.percent}
-					footerLeft={`${t("dashboard.system.free")}: ${formatBytes(Math.max(0, systemData.disk.total - systemData.disk.current), 1)}`}
-					footerRight={`${t("dashboard.system.average")}: ${formatPercent(average(systemData.disk_history.map((e) => e.value)), isRTL)}`}
+					badgeText={formatPercent(systemData.disk.percent, false)}
+					footerLeft={`• ${t("dashboard.system.free")}: ${formatBytes(Math.max(0, systemData.disk.total - systemData.disk.current), 1)}`}
+					footerRight={`• ${t("dashboard.system.average")}: ${formatPercent(average(systemData.disk_history.map((e) => e.value)), isRTL)}`}
 					isRTL={isRTL}
 				/>
 			</SimpleGrid>
@@ -2101,10 +2379,24 @@ export const Statistics: FC<BoxProps> = (props) => {
 				<SectionCard
 					title={
 						<HStack spacing={2.5}>
-							<Flex w="26px" h="26px" align="center" justify="center" borderRadius="7px" bg="panel.elevated" color="panel.textSecondary">
+							<Flex
+								w="26px"
+								h="26px"
+								align="center"
+								justify="center"
+								borderRadius="7px"
+								bg="var(--rb-panel-accent-soft)"
+								color="var(--rb-panel-accent)"
+								boxShadow="0 0 10px -2px var(--rb-panel-accent-glow)"
+								transition="all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+								_groupHover={{
+									transform: "scale(1.1)",
+									boxShadow: "0 0 16px var(--rb-panel-accent-glow)",
+								}}
+							>
 								<SignalIcon width={14} />
 							</Flex>
-							<span>{t("dashboard.system.bandwidthSpeed")}</span>
+							<span>{t("dashboard.system.bandwidthSpeed", "Bandwidth speed")}</span>
 						</HStack>
 					}
 					action={
@@ -2115,24 +2407,21 @@ export const Statistics: FC<BoxProps> = (props) => {
 							fontSize="11px"
 							variant="ghost"
 							borderRadius="full"
-							bg="panel.elevated"
-							color={colorMode === "light" ? "panel.textSecondary" : "panel.textMuted"}
-							fontWeight={colorMode === "light" ? "600" : "500"}
-							transition="all 0.2s ease"
-							_groupHover={{
-								md: {
-									bg: "panel.surface",
-									color: colorMode === "light" ? "panel.text" : "panel.textSecondary",
-								},
-							}}
+							bg="var(--rb-panel-accent-soft)"
+							borderWidth="1px"
+							borderColor="var(--rb-panel-accent-glow)"
+							color="var(--rb-panel-accent)"
+							boxShadow="0 0 8px -2px var(--rb-panel-accent-glow)"
+							fontWeight="600"
+							transition="all 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
 							_hover={{
-								md: {
-									bg: "panel.border !important",
-									color: "panel.text !important",
-								},
+								bg: "var(--rb-panel-accent-glow)",
+								color: "panel.text",
+								transform: "scale(1.05)",
+								boxShadow: "0 0 14px var(--rb-panel-accent-glow)",
 							}}
 							_active={{
-								bg: "panel.borderStrong !important",
+								transform: "scale(0.96)",
 							}}
 							_focusVisible={{
 								outline: "2px solid var(--rb-panel-accent)",
@@ -2150,24 +2439,26 @@ export const Statistics: FC<BoxProps> = (props) => {
 							onClick={() =>
 								openHistory({
 									type: "network",
-									title: t("dashboard.system.bandwidthSpeed"),
+									title: t("dashboard.system.bandwidthSpeed", "Bandwidth speed"),
 									networkEntries: systemData.network_history,
 								})
 							}
 						>
-							{t("dashboard.system.viewHistory")}
+							{t("dashboard.system.viewHistory", "View history")}
 						</Button>
 					}
 				>
-					<Stack spacing={3}>
+					<Stack spacing={2.5}>
 						<SpeedItem
+							direction="in"
 							icon={<ArrowDownTrayIcon width={13} />}
-							label={t("dashboard.system.incomingSpeed")}
+							label={t("dashboard.system.incomingSpeed", "Incoming speed")}
 							value={`${formatBytes(systemData.incoming_bandwidth_speed)}/s`}
 						/>
 						<SpeedItem
+							direction="out"
 							icon={<ArrowUpTrayIcon width={13} />}
-							label={t("dashboard.system.outgoingSpeed")}
+							label={t("dashboard.system.outgoingSpeed", "Outgoing speed")}
 							value={`${formatBytes(systemData.outgoing_bandwidth_speed)}/s`}
 						/>
 					</Stack>
@@ -2176,35 +2467,139 @@ export const Statistics: FC<BoxProps> = (props) => {
 				<SectionCard
 					title={
 						<HStack spacing={2.5}>
-							<Flex w="26px" h="26px" align="center" justify="center" borderRadius="7px" bg="panel.elevated" color="panel.textSecondary">
+							<Flex
+								w="26px"
+								h="26px"
+								align="center"
+								justify="center"
+								borderRadius="7px"
+								bg="var(--rb-panel-accent-soft)"
+								color="var(--rb-panel-accent)"
+								boxShadow="0 0 10px -2px var(--rb-panel-accent-glow)"
+								transition="all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+								_groupHover={{
+									transform: "scale(1.1)",
+									boxShadow: "0 0 16px var(--rb-panel-accent-glow)",
+								}}
+							>
 								<ClockIcon width={14} />
 							</Flex>
-							<span>{t("dashboard.system.uptime")}</span>
+							<span>{t("dashboard.system.uptime", "Uptime")}</span>
 						</HStack>
 					}
 				>
-					<Stack spacing={3}>
-						<Flex align="center" justify="space-between" gap={3}>
+					<Stack spacing={2.5}>
+						<Flex
+							align="center"
+							justify="space-between"
+							gap={3}
+							p={{ base: 1.5, sm: 2 }}
+							borderRadius="12px"
+							borderWidth="1px"
+							borderColor="transparent"
+							transition="all 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
+							_hover={{
+								bg: "var(--rb-panel-accent-subtle)",
+								borderColor: "var(--rb-panel-accent-soft)",
+								transform: "translateX(3px)",
+							}}
+						>
 							<HStack spacing={2.5} color="panel.textMuted">
-								<Flex w="28px" h="28px" align="center" justify="center" borderRadius="8px" bg="panel.elevated" flexShrink={0}>
+								<Flex
+									w="30px"
+									h="30px"
+									align="center"
+									justify="center"
+									borderRadius="9px"
+									bg="rgba(16, 185, 129, 0.12)"
+									color="#10b981"
+									borderWidth="1px"
+									borderColor="rgba(16, 185, 129, 0.25)"
+									boxShadow="0 0 10px rgba(16, 185, 129, 0.2)"
+									flexShrink={0}
+									transition="all 0.25s ease"
+								>
 									<ServerStackIcon width={13} />
 								</Flex>
-								<Text fontSize="13px" fontWeight="600" color="panel.textSecondary">
-									{t("dashboard.system.systemUptime")}
-								</Text>
+								<HStack spacing={2}>
+									<Text fontSize="13px" fontWeight="600" color="panel.textSecondary">
+										{t("dashboard.system.systemUptime", "System uptime")}
+									</Text>
+									<Box
+										w="6px"
+										h="6px"
+										borderRadius="full"
+										bg="#10b981"
+										boxShadow="0 0 8px #10b981"
+										sx={{
+											animation: "uptimePulse 2.5s ease-in-out infinite",
+											"@keyframes uptimePulse": {
+												"0%, 100%": { opacity: 0.4, transform: "scale(0.85)" },
+												"50%": { opacity: 1, transform: "scale(1.2)", boxShadow: "0 0 10px #10b981" },
+											},
+										}}
+									/>
+								</HStack>
 							</HStack>
-							{formatLocalizedDuration(systemData.uptime_seconds, t, isRTL)}
+							<Box fontSize="13px" fontWeight="700" color="panel.text">
+								{formatLocalizedDuration(systemData.uptime_seconds, t, isRTL)}
+							</Box>
 						</Flex>
-						<Flex align="center" justify="space-between" gap={3}>
+						<Flex
+							align="center"
+							justify="space-between"
+							gap={3}
+							p={{ base: 1.5, sm: 2 }}
+							borderRadius="12px"
+							borderWidth="1px"
+							borderColor="transparent"
+							transition="all 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
+							_hover={{
+								bg: "var(--rb-panel-accent-subtle)",
+								borderColor: "var(--rb-panel-accent-soft)",
+								transform: "translateX(3px)",
+							}}
+						>
 							<HStack spacing={2.5} color="panel.textMuted">
-								<Flex w="28px" h="28px" align="center" justify="center" borderRadius="8px" bg="panel.elevated" flexShrink={0}>
+								<Flex
+									w="30px"
+									h="30px"
+									align="center"
+									justify="center"
+									borderRadius="9px"
+									bg="var(--rb-panel-accent-soft)"
+									color="var(--rb-panel-accent)"
+									borderWidth="1px"
+									borderColor="var(--rb-panel-accent-glow)"
+									boxShadow="0 0 10px var(--rb-panel-accent-glow)"
+									flexShrink={0}
+									transition="all 0.25s ease"
+								>
 									<CircleStackIcon width={13} />
 								</Flex>
-								<Text fontSize="13px" fontWeight="600" color="panel.textSecondary">
-									{t("dashboard.system.panelUptime")}
-								</Text>
+								<HStack spacing={2}>
+									<Text fontSize="13px" fontWeight="600" color="panel.textSecondary">
+										{t("dashboard.system.panelUptime", "Panel uptime")}
+									</Text>
+									<Box
+										w="6px"
+										h="6px"
+										borderRadius="full"
+										bg="var(--rb-panel-accent)"
+										boxShadow="0 0 8px var(--rb-panel-accent-glow)"
+										sx={{
+											animation: "panelUptimePulse 2.5s ease-in-out infinite",
+											"@keyframes panelUptimePulse": {
+												"0%, 100%": { opacity: 0.4, transform: "scale(0.85)" },
+												"50%": { opacity: 1, transform: "scale(1.2)", boxShadow: "0 0 10px var(--rb-panel-accent-glow)" },
+											},
+										}}
+									/>
+								</HStack>
 							</HStack>
-							{formatLocalizedDuration(systemData.panel_uptime_seconds, t, isRTL)}
+							<Box fontSize="13px" fontWeight="700" color="panel.text">
+								{formatLocalizedDuration(systemData.panel_uptime_seconds, t, isRTL)}
+							</Box>
 						</Flex>
 					</Stack>
 				</SectionCard>
@@ -2215,10 +2610,20 @@ export const Statistics: FC<BoxProps> = (props) => {
 				roleGroup={false}
 				title={
 					<HStack spacing={2.5}>
-						<Flex w="26px" h="26px" align="center" justify="center" borderRadius="7px" bg="panel.elevated" color="panel.textSecondary">
+						<Flex
+							w="26px"
+							h="26px"
+							align="center"
+							justify="center"
+							borderRadius="7px"
+							bg="var(--rb-panel-accent-soft)"
+							color="var(--rb-panel-accent)"
+							boxShadow="0 0 10px -2px var(--rb-panel-accent-glow)"
+							transition="all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+						>
 							<CpuChipIcon width={14} />
 						</Flex>
-						<span>{t("dashboard.system.panelUsage")}</span>
+						<span>{t("dashboard.system.panelUsage", "Panel Usage Stats")}</span>
 					</HStack>
 				}
 				action={
@@ -2229,16 +2634,21 @@ export const Statistics: FC<BoxProps> = (props) => {
 						fontSize="11px"
 						variant="ghost"
 						borderRadius="full"
-						bg="panel.elevated"
-						color={colorMode === "light" ? "panel.textSecondary" : "panel.textMuted"}
-						fontWeight={colorMode === "light" ? "600" : "500"}
-						transition="all 0.2s ease"
+						bg="var(--rb-panel-accent-soft)"
+						borderWidth="1px"
+						borderColor="var(--rb-panel-accent-glow)"
+						color="var(--rb-panel-accent)"
+						boxShadow="0 0 8px -2px var(--rb-panel-accent-glow)"
+						fontWeight="600"
+						transition="all 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
 						_hover={{
-							bg: "panel.border !important",
-							color: "panel.text !important",
+							bg: "var(--rb-panel-accent-glow)",
+							color: "panel.text",
+							transform: "scale(1.05)",
+							boxShadow: "0 0 14px var(--rb-panel-accent-glow)",
 						}}
 						_active={{
-							bg: "panel.borderStrong !important",
+							transform: "scale(0.96)",
 						}}
 						_focusVisible={{
 							outline: "2px solid var(--rb-panel-accent)",
@@ -2256,251 +2666,748 @@ export const Statistics: FC<BoxProps> = (props) => {
 						onClick={() =>
 							openHistory({
 								type: "panel",
-								title: t("dashboard.system.panelUsage"),
+								title: t("dashboard.system.panelUsage", "Panel Usage Stats"),
 								cpuEntries: systemData.panel_cpu_history,
 								memoryEntries: systemData.panel_memory_history,
 							})
 						}
 					>
-						{t("dashboard.system.viewHistory")}
+						{t("dashboard.system.viewHistory", "View history")}
 					</Button>
 				}
 			>
-				<SimpleGrid columns={{ base: 1, sm: 2 }} gap={{ base: 3, md: 4 }}>
+				<SimpleGrid columns={{ base: 2, sm: 2 }} gap={{ base: 2.5, sm: 3, md: 4 }}>
 					<ResourceCard
-						label={`${t("dashboard.system.cpuUsage")} (Panel)`}
+						label={`${t("dashboard.system.cpuUsage", "CPU usage")} (Panel)`}
 						icon={<CpuChipIcon width={16} />}
 						value={formatPercent(systemData.panel_cpu_percent, false)}
 						percent={systemData.panel_cpu_percent}
-						metaValue={formatNumberValue(systemData.app_threads)}
-						metaUnit={t("dashboard.system.thread")}
-						footerLeft={`${t("dashboard.system.average")}: ${formatPercent(average(systemData.panel_cpu_history.map((e) => e.value)), isRTL)}`}
-						footerRight={`${t("dashboard.system.peak")}: ${formatPercent(peak(systemData.panel_cpu_history.map((e) => e.value)), isRTL)}`}
+						badgeText={`${systemData.app_threads} ${t("dashboard.system.thread", "Thread")}`}
+						footerLeft={`• ${t("dashboard.system.average", "Avg.")}: ${formatPercent(average(systemData.panel_cpu_history.map((e) => e.value)), isRTL)}`}
+						footerRight={`• ${t("dashboard.system.peak", "Peak")}: ${formatPercent(peak(systemData.panel_cpu_history.map((e) => e.value)), isRTL)}`}
 						isRTL={isRTL}
 					/>
 					<ResourceCard
-						label={`${t("dashboard.system.memoryUsage")} (Panel)`}
+						label={`${t("dashboard.system.memoryUsage", "Memory usage")} (Panel)`}
 						icon={<ServerStackIcon width={16} />}
 						value={formatBytes(systemData.app_memory, 1)}
 						totalValue={formatBytes(systemData.memory.total, 1)}
 						percent={systemData.panel_memory_percent}
-						footerLeft={`${t("dashboard.system.average")}: ${formatPercent(average(systemData.panel_memory_history.map((e) => e.value)), isRTL)}`}
-						footerRight={`${t("dashboard.system.peak")}: ${formatPercent(peak(systemData.panel_memory_history.map((e) => e.value)), isRTL)}`}
+						badgeText={formatPercent(systemData.panel_memory_percent, false)}
+						footerLeft={`• ${t("dashboard.system.average", "Avg.")}: ${formatPercent(average(systemData.panel_memory_history.map((e) => e.value)), isRTL)}`}
+						footerRight={`• ${t("dashboard.system.peak", "Peak")}: ${formatPercent(peak(systemData.panel_memory_history.map((e) => e.value)), isRTL)}`}
 						isRTL={isRTL}
 					/>
 				</SimpleGrid>
 			</SectionCard>
 
-			<SectionCard
-				title={
-					<HStack spacing={2.5}>
-						<Flex w="26px" h="26px" align="center" justify="center" borderRadius="7px" bg="panel.elevated" color="panel.textSecondary">
-							<UserGroupIcon width={14} />
-						</Flex>
-						<span>{t("dashboard.users")}</span>
-					</HStack>
-				}
-				action={
-					canSeeGlobal ? (
-						<HStack
-							spacing={0.5}
-							bg="panel.elevated"
-							p={0.5}
-							borderRadius="8px"
-							position="relative"
-							transition="all 0.25s ease"
-							_groupHover={{
-								md: {
-									bg: "panel.surface",
-								},
-							}}
-						>
-							<Box position="relative">
-								{userTab === "all" && (
-									<motion.div
-										layoutId="usersOverviewTabPill"
-										style={{
-											position: "absolute",
-											top: 0,
-											left: 0,
-											right: 0,
-											bottom: 0,
-											borderRadius: "6px",
-											backgroundColor: "var(--rb-panel-accent)",
-											border: "1px solid var(--rb-panel-accent)",
-											boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
-											zIndex: 1,
-										}}
-										transition={{
-											type: "tween",
-											ease: "easeInOut",
-											duration: 0.25,
-										}}
-									/>
-								)}
-								<Button
-									size="xs"
-									h="22px"
-									px={2.5}
-									borderRadius="6px"
-									fontSize="11px"
-									fontWeight="600"
-									variant="ghost"
-									bg="transparent !important"
-									color={userTab === "all" ? "white" : "panel.text"}
-									position="relative"
-									zIndex={2}
-									transition="all 0.2s ease"
-									_hover={{
-										md: {
-											color: userTab === "all" ? "white" : "panel.text",
-										},
-									}}
-									_focusVisible={{
-										outline: "2px solid var(--rb-panel-accent)",
-										outlineOffset: "2px",
-									}}
-									onClick={() => setUserTab("all")}
-								>
-									{t("dashboard.users.allUsers")}
-								</Button>
-							</Box>
-							<Box position="relative">
-								{userTab === "mine" && (
-									<motion.div
-										layoutId="usersOverviewTabPill"
-										style={{
-											position: "absolute",
-											top: 0,
-											left: 0,
-											right: 0,
-											bottom: 0,
-											borderRadius: "6px",
-											backgroundColor: "var(--rb-panel-accent)",
-											border: "1px solid var(--rb-panel-accent)",
-											boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
-											zIndex: 1,
-										}}
-										transition={{
-											type: "tween",
-											ease: "easeInOut",
-											duration: 0.25,
-										}}
-									/>
-								)}
-								<Button
-									size="xs"
-									h="22px"
-									px={2.5}
-									borderRadius="6px"
-									fontSize="11px"
-									fontWeight="600"
-									variant="ghost"
-									bg="transparent !important"
-									color={userTab === "mine" ? "white" : "panel.text"}
-									position="relative"
-									zIndex={2}
-									transition="all 0.2s ease"
-									_hover={{
-										md: {
-											color: userTab === "mine" ? "white" : "panel.text",
-										},
-									}}
-									_focusVisible={{
-										outline: "2px solid var(--rb-panel-accent)",
-										outlineOffset: "2px",
-									}}
-									onClick={() => setUserTab("mine")}
-								>
-									{t("dashboard.users.myUsers")}
-								</Button>
-							</Box>
-						</HStack>
-					) : undefined
-				}
-			>
-				<AnimatedHeightWrapper activeKey={userTab}>
-					{canSeeGlobal && userTab === "all" ? (
-						<Stack spacing={0}>
-							<StatRow label={t("dashboard.users.total")} value={systemData.total_user} tagColor="#3b82f6" />
-							<StatRow label={t("dashboard.users.active")} value={systemData.users_active} tag={activePercent} tagColor="#22c55e" />
-							<StatRow
-								label={t("dashboard.users.online")}
-								value={systemData.online_users}
-								tag={onlinePercent}
-								tagColor="#06b6d4"
-								helper={
-									systemData.online_users_upload_speed || systemData.online_users_download_speed
-										? `↑ ${formatBytes(systemData.online_users_upload_speed)}/s · ↓ ${formatBytes(systemData.online_users_download_speed)}/s`
-										: undefined
-								}
-							/>
-							<StatRow label={t("dashboard.users.onHold")} value={systemData.users_on_hold} tagColor="#a855f7" />
-							<StatRow label={t("dashboard.users.limited")} value={systemData.users_limited} tagColor="#f59e0b" />
-							<StatRow label={t("dashboard.users.expired")} value={systemData.users_expired} tagColor="#f97316" />
-						</Stack>
-					) : (
-						<Stack spacing={0}>
-							<StatRow label={t("dashboard.users.total")} value={myTotalUsers} tagColor="#3b82f6" />
-							<StatRow label={t("dashboard.users.active")} value={myActiveUsers} tag={myActivePercent} tagColor="#22c55e" />
-							<StatRow
-								label={t("dashboard.users.online")}
-								value={myOnlineUsers}
-								tag={myOnlinePercent}
-								tagColor="#06b6d4"
-								helper={
-									myOnlineUploadSpeed || myOnlineDownloadSpeed
-										? `↑ ${formatBytes(myOnlineUploadSpeed)}/s · ↓ ${formatBytes(myOnlineDownloadSpeed)}/s`
-										: undefined
-								}
-							/>
-							<StatRow label={t("dashboard.users.onHold")} value={myOnHoldUsers} tagColor="#a855f7" />
-							<StatRow label={t("dashboard.users.limited")} value={myLimitedUsers} tagColor="#f59e0b" />
-							<StatRow label={t("dashboard.users.expired")} value={myExpiredUsers} tagColor="#f97316" />
-							<StatRow
-								label={t("dashboard.users.currentUserUsage")}
-								value={formatBytes(myActiveUsersUsedTraffic, 1)}
-								tagColor="#3b82f6"
-							/>
-							{systemData.personal_usage?.reset_bytes ? (
-								<StatRow
-									label={t("dashboard.users.resetData")}
-									value={formatBytes(systemData.personal_usage.reset_bytes, 1)}
-									tagColor="#f59e0b"
-								/>
-							) : null}
-						</Stack>
-					)}
-				</AnimatedHeightWrapper>
-			</SectionCard>
-
-			{canSeeGlobal && systemData.admin_overview && (
+			<SimpleGrid columns={{ base: 1, lg: 2 }} gap={{ base: 3, md: 4 }}>
 				<SectionCard
 					title={
 						<HStack spacing={2.5}>
-							<Flex w="26px" h="26px" align="center" justify="center" borderRadius="7px" bg="panel.elevated" color="panel.textSecondary">
-								<ShieldCheckIcon width={14} />
+							<Flex
+								w="26px"
+								h="26px"
+								align="center"
+								justify="center"
+								borderRadius="7px"
+								bg="var(--rb-panel-accent-soft)"
+								color="var(--rb-panel-accent)"
+								boxShadow="0 0 10px -2px var(--rb-panel-accent-glow)"
+								transition="all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+								_groupHover={{
+									transform: "scale(1.1)",
+									boxShadow: "0 0 16px var(--rb-panel-accent-glow)",
+								}}
+							>
+								<UserGroupIcon width={14} />
 							</Flex>
-							<span>{t("dashboard.admins")}</span>
+							<span>{t("dashboard.users.overview", t("dashboard.users"))}</span>
 						</HStack>
 					}
+					action={
+						canSeeGlobal ? (
+							<HStack
+								spacing={0.5}
+								bg="panel.elevated"
+								p={0.5}
+								borderRadius="8px"
+								position="relative"
+								transition="all 0.25s ease"
+								_groupHover={{
+									md: {
+										bg: "panel.surface",
+									},
+								}}
+							>
+								<Box position="relative">
+									{userTab === "all" && (
+										<motion.div
+											layoutId="usersOverviewTabPill"
+											style={{
+												position: "absolute",
+												top: 0,
+												left: 0,
+												right: 0,
+												bottom: 0,
+												borderRadius: "6px",
+												backgroundColor: "var(--rb-panel-accent)",
+												border: "1px solid var(--rb-panel-accent)",
+												boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+												zIndex: 1,
+											}}
+											transition={{
+												type: "tween",
+												ease: "easeInOut",
+												duration: 0.25,
+											}}
+										/>
+									)}
+									<Button
+										size="xs"
+										h="22px"
+										px={2.5}
+										borderRadius="6px"
+										fontSize="11px"
+										fontWeight="600"
+										variant="ghost"
+										bg="transparent !important"
+										color={userTab === "all" ? "white" : "panel.text"}
+										position="relative"
+										zIndex={2}
+										transition="all 0.2s ease"
+										_hover={{
+											md: {
+												color: userTab === "all" ? "white" : "panel.text",
+											},
+										}}
+										_focusVisible={{
+											outline: "2px solid var(--rb-panel-accent)",
+											outlineOffset: "2px",
+										}}
+										onClick={() => setUserTab("all")}
+									>
+										{t("dashboard.users.allUsers", isRTL ? "همه کاربران" : "All Users")}
+									</Button>
+								</Box>
+								<Box position="relative">
+									{userTab === "mine" && (
+										<motion.div
+											layoutId="usersOverviewTabPill"
+											style={{
+												position: "absolute",
+												top: 0,
+												left: 0,
+												right: 0,
+												bottom: 0,
+												borderRadius: "6px",
+												backgroundColor: "var(--rb-panel-accent)",
+												border: "1px solid var(--rb-panel-accent)",
+												boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+												zIndex: 1,
+											}}
+											transition={{
+												type: "tween",
+												ease: "easeInOut",
+												duration: 0.25,
+											}}
+										/>
+									)}
+									<Button
+										size="xs"
+										h="22px"
+										px={2.5}
+										borderRadius="6px"
+										fontSize="11px"
+										fontWeight="600"
+										variant="ghost"
+										bg="transparent !important"
+										color={userTab === "mine" ? "white" : "panel.text"}
+										position="relative"
+										zIndex={2}
+										transition="all 0.2s ease"
+										_hover={{
+											md: {
+												color: userTab === "mine" ? "white" : "panel.text",
+											},
+										}}
+										_focusVisible={{
+											outline: "2px solid var(--rb-panel-accent)",
+											outlineOffset: "2px",
+										}}
+										onClick={() => setUserTab("mine")}
+									>
+										{t("dashboard.users.myUsers", isRTL ? "کاربران من" : "My Users")}
+									</Button>
+								</Box>
+							</HStack>
+						) : undefined
+					}
 				>
-					<Stack spacing={0}>
-						<StatRow label={t("dashboard.admins.total")} value={systemData.admin_overview.total_admins} tagColor="#3b82f6" />
-						<StatRow label={t("dashboard.admins.fullAccess")} value={systemData.admin_overview.full_access_admins} tagColor="#f59e0b" />
-						<StatRow label={t("dashboard.admins.sudo")} value={systemData.admin_overview.sudo_admins} tagColor="#a855f7" />
-						<StatRow label={t("dashboard.admins.standard")} value={systemData.admin_overview.standard_admins} tagColor="#22c55e" />
-						{systemData.admin_overview.top_admin_username && (
-							<StatRow
-								label={t("dashboard.admins.topAdmin")}
-								value={`${systemData.admin_overview.top_admin_username} · ${formatBytes(systemData.admin_overview.top_admin_usage)}`}
-								dimLabel
-								accent
-							/>
+					<AnimatedHeightWrapper activeKey={userTab}>
+						{canSeeGlobal && userTab === "all" ? (
+							<Flex
+								direction={{ base: "row", sm: "row" }}
+								align="center"
+								justify="space-between"
+								gap={{ base: 3, sm: 6 }}
+								py={1}
+							>
+								<DonutGauge
+									total={systemData.total_user}
+									active={systemData.users_active}
+									size={105}
+								/>
+								<Stack spacing={1} flex="1" minW={0}>
+									<Flex
+										justify="space-between"
+										align="center"
+										px={2}
+										py={1}
+										borderRadius="8px"
+										transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+										_hover={{ bg: "var(--rb-panel-accent-subtle)", transform: "translateX(2px)" }}
+									>
+										<HStack spacing={2} minW={0}>
+											<Box w="6px" h="6px" borderRadius="full" bg="var(--rb-panel-accent)" boxShadow="0 0 8px var(--rb-panel-accent-glow)" flexShrink={0} />
+											<Text fontSize="12px" fontWeight="600" color="panel.textSecondary" noOfLines={1}>
+												{t("dashboard.users.total", isRTL ? "کل" : "Total")}
+											</Text>
+										</HStack>
+										<Text fontSize="12px" fontWeight="700" color="panel.text" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+											{systemData.total_user}
+										</Text>
+									</Flex>
+									<Flex
+										justify="space-between"
+										align="center"
+										px={2}
+										py={1}
+										borderRadius="8px"
+										transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+										_hover={{ bg: "var(--rb-panel-accent-subtle)", transform: "translateX(2px)" }}
+									>
+										<HStack spacing={1.5} minW={0}>
+											<Box w="6px" h="6px" borderRadius="full" bg="#22c55e" boxShadow="0 0 8px rgba(34, 197, 94, 0.5)" flexShrink={0} />
+											<Text fontSize="12px" fontWeight="600" color="panel.textSecondary" noOfLines={1}>
+												{t("dashboard.users.active", isRTL ? "فعال" : "Active")}
+											</Text>
+											<Flex
+												align="center"
+												px={1.5}
+												py={0.2}
+												borderRadius="full"
+												bg="rgba(34, 197, 94, 0.12)"
+												borderWidth="1px"
+												borderColor="rgba(34, 197, 94, 0.3)"
+												boxShadow="0 0 8px rgba(34, 197, 94, 0.2)"
+												color="#22c55e"
+												fontSize="9.5px"
+												fontWeight="700"
+												dir="ltr"
+												sx={{ fontVariantNumeric: "tabular-nums" }}
+											>
+												{activePercent}
+											</Flex>
+										</HStack>
+										<Text fontSize="12px" fontWeight="700" color="panel.text" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+											{systemData.users_active}
+										</Text>
+									</Flex>
+									<Flex
+										justify="space-between"
+										align="center"
+										px={2}
+										py={1}
+										borderRadius="8px"
+										transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+										_hover={{ bg: "var(--rb-panel-accent-subtle)", transform: "translateX(2px)" }}
+									>
+										<HStack spacing={1.5} minW={0}>
+											<Box w="6px" h="6px" borderRadius="full" bg="#06b6d4" boxShadow="0 0 8px rgba(6, 182, 212, 0.5)" flexShrink={0} />
+											<Text fontSize="12px" fontWeight="600" color="panel.textSecondary" noOfLines={1}>
+												{t("dashboard.users.online", isRTL ? "آنلاین" : "Online")}
+											</Text>
+											<Flex
+												align="center"
+												px={1.5}
+												py={0.2}
+												borderRadius="full"
+												bg="rgba(6, 182, 212, 0.12)"
+												borderWidth="1px"
+												borderColor="rgba(6, 182, 212, 0.3)"
+												boxShadow="0 0 8px rgba(6, 182, 212, 0.2)"
+												color="#06b6d4"
+												fontSize="9.5px"
+												fontWeight="700"
+												dir="ltr"
+												sx={{ fontVariantNumeric: "tabular-nums" }}
+											>
+												{onlinePercent}
+											</Flex>
+										</HStack>
+										<Text fontSize="12px" fontWeight="700" color="panel.text" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+											{systemData.online_users}
+										</Text>
+									</Flex>
+									<Flex
+										justify="space-between"
+										align="center"
+										px={2}
+										py={1}
+										borderRadius="8px"
+										transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+										_hover={{ bg: "var(--rb-panel-accent-subtle)", transform: "translateX(2px)" }}
+									>
+										<HStack spacing={2} minW={0}>
+											<Box w="6px" h="6px" borderRadius="full" bg="#a855f7" boxShadow="0 0 8px rgba(168, 85, 247, 0.5)" flexShrink={0} />
+											<Text fontSize="12px" fontWeight="600" color="panel.textSecondary" noOfLines={1}>
+												{t("dashboard.users.onHold", isRTL ? "در انتظار" : "On Hold")}
+											</Text>
+										</HStack>
+										<Text fontSize="12px" fontWeight="700" color="panel.text" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+											{systemData.users_on_hold}
+										</Text>
+									</Flex>
+									<Flex
+										justify="space-between"
+										align="center"
+										px={2}
+										py={1}
+										borderRadius="8px"
+										transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+										_hover={{ bg: "var(--rb-panel-accent-subtle)", transform: "translateX(2px)" }}
+									>
+										<HStack spacing={2} minW={0}>
+											<Box w="6px" h="6px" borderRadius="full" bg="#f59e0b" boxShadow="0 0 8px rgba(245, 158, 11, 0.5)" flexShrink={0} />
+											<Text fontSize="12px" fontWeight="600" color="panel.textSecondary" noOfLines={1}>
+												{t("dashboard.users.limited", isRTL ? "محدود شده" : "Limited")}
+											</Text>
+										</HStack>
+										<Text fontSize="12px" fontWeight="700" color="panel.text" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+											{systemData.users_limited}
+										</Text>
+									</Flex>
+									<Flex
+										justify="space-between"
+										align="center"
+										px={2}
+										py={1}
+										borderRadius="8px"
+										transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+										_hover={{ bg: "var(--rb-panel-accent-subtle)", transform: "translateX(2px)" }}
+									>
+										<HStack spacing={2} minW={0}>
+											<Box w="6px" h="6px" borderRadius="full" bg="#f97316" boxShadow="0 0 8px rgba(249, 115, 22, 0.5)" flexShrink={0} />
+											<Text fontSize="12px" fontWeight="600" color="panel.textSecondary" noOfLines={1}>
+												{t("dashboard.users.expired", isRTL ? "منقضی شده" : "Expired")}
+											</Text>
+										</HStack>
+										<Text fontSize="12px" fontWeight="700" color="panel.text" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+											{systemData.users_expired}
+										</Text>
+									</Flex>
+								</Stack>
+							</Flex>
+						) : (
+							<Flex
+								direction={{ base: "row", sm: "row" }}
+								align="center"
+								justify="space-between"
+								gap={{ base: 3, sm: 6 }}
+								py={1}
+							>
+								<DonutGauge
+									total={myTotalUsers}
+									active={myActiveUsers}
+									size={105}
+								/>
+								<Stack spacing={1} flex="1" minW={0}>
+									<Flex
+										justify="space-between"
+										align="center"
+										px={2}
+										py={1}
+										borderRadius="8px"
+										transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+										_hover={{ bg: "var(--rb-panel-accent-subtle)", transform: "translateX(2px)" }}
+									>
+										<HStack spacing={2} minW={0}>
+											<Box w="6px" h="6px" borderRadius="full" bg="var(--rb-panel-accent)" boxShadow="0 0 8px var(--rb-panel-accent-glow)" flexShrink={0} />
+											<Text fontSize="12px" fontWeight="600" color="panel.textSecondary" noOfLines={1}>
+												{t("dashboard.users.total", isRTL ? "کل" : "Total")}
+											</Text>
+										</HStack>
+										<Text fontSize="12px" fontWeight="700" color="panel.text" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+											{myTotalUsers}
+										</Text>
+									</Flex>
+									<Flex
+										justify="space-between"
+										align="center"
+										px={2}
+										py={1}
+										borderRadius="8px"
+										transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+										_hover={{ bg: "var(--rb-panel-accent-subtle)", transform: "translateX(2px)" }}
+									>
+										<HStack spacing={1.5} minW={0}>
+											<Box w="6px" h="6px" borderRadius="full" bg="#22c55e" boxShadow="0 0 8px rgba(34, 197, 94, 0.5)" flexShrink={0} />
+											<Text fontSize="12px" fontWeight="600" color="panel.textSecondary" noOfLines={1}>
+												{t("dashboard.users.active", isRTL ? "فعال" : "Active")}
+											</Text>
+											<Flex
+												align="center"
+												px={1.5}
+												py={0.2}
+												borderRadius="full"
+												bg="rgba(34, 197, 94, 0.12)"
+												borderWidth="1px"
+												borderColor="rgba(34, 197, 94, 0.3)"
+												boxShadow="0 0 8px rgba(34, 197, 94, 0.2)"
+												color="#22c55e"
+												fontSize="9.5px"
+												fontWeight="700"
+												dir="ltr"
+												sx={{ fontVariantNumeric: "tabular-nums" }}
+											>
+												{myActivePercent}
+											</Flex>
+										</HStack>
+										<Text fontSize="12px" fontWeight="700" color="panel.text" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+											{myActiveUsers}
+										</Text>
+									</Flex>
+									<Flex
+										justify="space-between"
+										align="center"
+										px={2}
+										py={1}
+										borderRadius="8px"
+										transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+										_hover={{ bg: "var(--rb-panel-accent-subtle)", transform: "translateX(2px)" }}
+									>
+										<HStack spacing={1.5} minW={0}>
+											<Box w="6px" h="6px" borderRadius="full" bg="#06b6d4" boxShadow="0 0 8px rgba(6, 182, 212, 0.5)" flexShrink={0} />
+											<Text fontSize="12px" fontWeight="600" color="panel.textSecondary" noOfLines={1}>
+												{t("dashboard.users.online", isRTL ? "آنلاین" : "Online")}
+											</Text>
+											<Flex
+												align="center"
+												px={1.5}
+												py={0.2}
+												borderRadius="full"
+												bg="rgba(6, 182, 212, 0.12)"
+												borderWidth="1px"
+												borderColor="rgba(6, 182, 212, 0.3)"
+												boxShadow="0 0 8px rgba(6, 182, 212, 0.2)"
+												color="#06b6d4"
+												fontSize="9.5px"
+												fontWeight="700"
+												dir="ltr"
+												sx={{ fontVariantNumeric: "tabular-nums" }}
+											>
+												{myOnlinePercent}
+											</Flex>
+										</HStack>
+										<Text fontSize="12px" fontWeight="700" color="panel.text" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+											{myOnlineUsers}
+										</Text>
+									</Flex>
+									<Flex
+										justify="space-between"
+										align="center"
+										px={2}
+										py={1}
+										borderRadius="8px"
+										transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+										_hover={{ bg: "var(--rb-panel-accent-subtle)", transform: "translateX(2px)" }}
+									>
+										<HStack spacing={2} minW={0}>
+											<Box w="6px" h="6px" borderRadius="full" bg="#a855f7" boxShadow="0 0 8px rgba(168, 85, 247, 0.5)" flexShrink={0} />
+											<Text fontSize="12px" fontWeight="600" color="panel.textSecondary" noOfLines={1}>
+												{t("dashboard.users.onHold", isRTL ? "در انتظار" : "On Hold")}
+											</Text>
+										</HStack>
+										<Text fontSize="12px" fontWeight="700" color="panel.text" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+											{myOnHoldUsers}
+										</Text>
+									</Flex>
+									<Flex
+										justify="space-between"
+										align="center"
+										px={2}
+										py={1}
+										borderRadius="8px"
+										transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+										_hover={{ bg: "var(--rb-panel-accent-subtle)", transform: "translateX(2px)" }}
+									>
+										<HStack spacing={2} minW={0}>
+											<Box w="6px" h="6px" borderRadius="full" bg="#f59e0b" boxShadow="0 0 8px rgba(245, 158, 11, 0.5)" flexShrink={0} />
+											<Text fontSize="12px" fontWeight="600" color="panel.textSecondary" noOfLines={1}>
+												{t("dashboard.users.limited", isRTL ? "محدود شده" : "Limited")}
+											</Text>
+										</HStack>
+										<Text fontSize="12px" fontWeight="700" color="panel.text" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+											{myLimitedUsers}
+										</Text>
+									</Flex>
+									<Flex
+										justify="space-between"
+										align="center"
+										px={2}
+										py={1}
+										borderRadius="8px"
+										transition="all 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+										_hover={{ bg: "var(--rb-panel-accent-subtle)", transform: "translateX(2px)" }}
+									>
+										<HStack spacing={2} minW={0}>
+											<Box w="6px" h="6px" borderRadius="full" bg="#f97316" boxShadow="0 0 8px rgba(249, 115, 22, 0.5)" flexShrink={0} />
+											<Text fontSize="12px" fontWeight="600" color="panel.textSecondary" noOfLines={1}>
+												{t("dashboard.users.expired", isRTL ? "منقضی شده" : "Expired")}
+											</Text>
+										</HStack>
+										<Text fontSize="12px" fontWeight="700" color="panel.text" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+											{myExpiredUsers}
+										</Text>
+									</Flex>
+									<Flex justify="space-between" align="center" pt={1} borderTop="1px solid" borderColor="panel.border">
+										<Text fontSize="11px" fontWeight="600" color="panel.textMuted">
+											{t("dashboard.users.currentUserUsage", isRTL ? "مصرف کاربران جاری" : "Current User Usage")}
+										</Text>
+										<Text fontSize="11px" fontWeight="700" color="panel.text" dir="ltr">
+											{formatBytes(myActiveUsersUsedTraffic, 1)}
+										</Text>
+									</Flex>
+								</Stack>
+							</Flex>
 						)}
-					</Stack>
+					</AnimatedHeightWrapper>
 				</SectionCard>
-			)}
+
+				{canSeeGlobal && systemData.admin_overview && (
+					<SectionCard
+						title={
+							<HStack spacing={2.5}>
+								<Flex
+									w="26px"
+									h="26px"
+									align="center"
+									justify="center"
+									borderRadius="7px"
+									bg="var(--rb-panel-accent-soft)"
+									color="var(--rb-panel-accent)"
+									boxShadow="0 0 10px -2px var(--rb-panel-accent-glow)"
+									transition="all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+									_groupHover={{
+										transform: "scale(1.1)",
+										boxShadow: "0 0 16px var(--rb-panel-accent-glow)",
+									}}
+								>
+									<ShieldCheckIcon width={14} />
+								</Flex>
+								<span>{t("dashboard.admins.overview", isRTL ? "بررسی ادمین‌ها" : "Admin overview")}</span>
+							</HStack>
+						}
+					>
+						<Stack spacing={3}>
+							<SimpleGrid columns={3} spacing={2.5}>
+								<Box
+									bg="panel.elevated"
+									borderRadius="12px"
+									p={{ base: 2, sm: 3 }}
+									borderWidth="1px"
+									borderColor="rgba(16, 185, 129, 0.25)"
+									background="linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%)"
+									boxShadow="inset 0 1px 1px 0 rgba(255, 255, 255, 0.04)"
+									position="relative"
+									overflow="hidden"
+									_before={{
+										content: '""',
+										position: "absolute",
+										top: 0,
+										left: 0,
+										right: 0,
+										height: "2px",
+										bg: "linear-gradient(90deg, transparent, #10b981, transparent)",
+										opacity: 0.8,
+									}}
+									transition="all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+									_hover={{
+										borderColor: "rgba(16, 185, 129, 0.5)",
+										transform: "translateY(-3px)",
+										boxShadow: "0 8px 24px -4px rgba(16, 185, 129, 0.35)",
+									}}
+								>
+									<HStack spacing={1.5} mb={1}>
+										<Box w="6px" h="6px" borderRadius="full" bg="#10b981" boxShadow="0 0 8px #10b981" flexShrink={0} />
+										<Text fontSize={{ base: "10px", sm: "11px" }} fontWeight="600" color="panel.textMuted" noOfLines={1}>
+											{t("dashboard.admins.fullAccess", isRTL ? "مدیران دسترسی کامل" : "Full-access admins")}
+										</Text>
+									</HStack>
+									<Text fontSize={{ base: "18px", sm: "22px" }} fontWeight="800" color="#10b981" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+										{systemData.admin_overview.full_access_admins}
+									</Text>
+								</Box>
+
+								<Box
+									bg="panel.elevated"
+									borderRadius="12px"
+									p={{ base: 2, sm: 3 }}
+									borderWidth="1px"
+									borderColor="rgba(168, 85, 247, 0.25)"
+									background="linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(168, 85, 247, 0.02) 100%)"
+									boxShadow="inset 0 1px 1px 0 rgba(255, 255, 255, 0.04)"
+									position="relative"
+									overflow="hidden"
+									_before={{
+										content: '""',
+										position: "absolute",
+										top: 0,
+										left: 0,
+										right: 0,
+										height: "2px",
+										bg: "linear-gradient(90deg, transparent, #a855f7, transparent)",
+										opacity: 0.8,
+									}}
+									transition="all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+									_hover={{
+										borderColor: "rgba(168, 85, 247, 0.5)",
+										transform: "translateY(-3px)",
+										boxShadow: "0 8px 24px -4px rgba(168, 85, 247, 0.35)",
+									}}
+								>
+									<HStack spacing={1.5} mb={1}>
+										<Box w="6px" h="6px" borderRadius="full" bg="#a855f7" boxShadow="0 0 8px #a855f7" flexShrink={0} />
+										<Text fontSize={{ base: "10px", sm: "11px" }} fontWeight="600" color="panel.textMuted" noOfLines={1}>
+											{t("dashboard.admins.sudo", isRTL ? "مدیران سودو" : "Sudo admins")}
+										</Text>
+									</HStack>
+									<Text fontSize={{ base: "18px", sm: "22px" }} fontWeight="800" color="#a855f7" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+										{systemData.admin_overview.sudo_admins}
+									</Text>
+								</Box>
+
+								<Box
+									bg="panel.elevated"
+									borderRadius="12px"
+									p={{ base: 2, sm: 3 }}
+									borderWidth="1px"
+									borderColor="rgba(56, 189, 248, 0.25)"
+									background="linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(56, 189, 248, 0.02) 100%)"
+									boxShadow="inset 0 1px 1px 0 rgba(255, 255, 255, 0.04)"
+									position="relative"
+									overflow="hidden"
+									_before={{
+										content: '""',
+										position: "absolute",
+										top: 0,
+										left: 0,
+										right: 0,
+										height: "2px",
+										bg: "linear-gradient(90deg, transparent, #38bdf8, transparent)",
+										opacity: 0.8,
+									}}
+									transition="all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+									_hover={{
+										borderColor: "rgba(56, 189, 248, 0.5)",
+										transform: "translateY(-3px)",
+										boxShadow: "0 8px 24px -4px rgba(56, 189, 248, 0.35)",
+									}}
+								>
+									<HStack spacing={1.5} mb={1}>
+										<Box w="6px" h="6px" borderRadius="full" bg="#38bdf8" boxShadow="0 0 8px #38bdf8" flexShrink={0} />
+										<Text fontSize={{ base: "10px", sm: "11px" }} fontWeight="600" color="panel.textMuted" noOfLines={1}>
+											{t("dashboard.admins.standard", isRTL ? "مدیران استاندارد" : "Standard admins")}
+										</Text>
+									</HStack>
+									<Text fontSize={{ base: "18px", sm: "22px" }} fontWeight="800" color="#38bdf8" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+										{systemData.admin_overview.standard_admins}
+									</Text>
+								</Box>
+							</SimpleGrid>
+
+							<Flex justify="space-between" align="center" px={1} py={1}>
+								<HStack spacing={2}>
+									<Box w="6px" h="6px" borderRadius="full" bg="var(--rb-panel-accent)" boxShadow="0 0 8px var(--rb-panel-accent-glow)" flexShrink={0} />
+									<Text fontSize="12px" fontWeight="600" color="panel.textSecondary">
+										{t("dashboard.admins.total", isRTL ? "کل مدیران" : "Total admins")}
+									</Text>
+								</HStack>
+								<Text fontSize="13px" fontWeight="700" color="panel.text" dir="ltr" sx={{ fontVariantNumeric: "tabular-nums" }}>
+									{systemData.admin_overview.total_admins}
+								</Text>
+							</Flex>
+
+							<Box
+								bg="panel.elevated"
+								borderRadius="12px"
+								p={{ base: 2.5, sm: 3 }}
+								borderWidth="1px"
+								borderColor="var(--rb-panel-accent-soft)"
+								background="linear-gradient(135deg, var(--rb-panel-accent-subtle) 0%, transparent 100%)"
+								boxShadow="inset 0 1px 1px 0 rgba(255, 255, 255, 0.04)"
+								transition="all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+								_hover={{
+									borderColor: "var(--rb-panel-accent-glow)",
+									boxShadow: "0 8px 24px -4px var(--rb-panel-accent-glow)",
+									transform: "translateY(-2px)",
+								}}
+							>
+								<Flex justify="space-between" align="center" gap={2}>
+									<HStack spacing={2.5} minW={0}>
+										<Flex
+											w="30px"
+											h="30px"
+											borderRadius="9px"
+											bg="var(--rb-panel-accent-soft)"
+											align="center"
+											justify="center"
+											color="var(--rb-panel-accent)"
+											boxShadow="0 0 12px -2px var(--rb-panel-accent-glow)"
+											flexShrink={0}
+											transition="all 0.3s ease"
+										>
+											<ShieldCheckIcon width={16} />
+										</Flex>
+										<Box minW={0}>
+											<Text fontSize="10px" fontWeight="600" color="panel.textMuted" noOfLines={1}>
+												{t("dashboard.admins.topAdmin", isRTL ? "برترین مدیر" : "Top admin")}
+											</Text>
+											<Text fontSize="13px" fontWeight="700" color="panel.text" noOfLines={1}>
+												{systemData.admin_overview.top_admin_username || userData.username || "admin"}
+											</Text>
+										</Box>
+									</HStack>
+									<Flex
+										align="center"
+										px={2.5}
+										py={0.8}
+										borderRadius="full"
+										bg="var(--rb-panel-accent-soft)"
+										borderWidth="1px"
+										borderColor="var(--rb-panel-accent-glow)"
+										color="var(--rb-panel-accent)"
+										boxShadow="0 0 12px -2px var(--rb-panel-accent-glow)"
+										fontSize="11.5px"
+										fontWeight="700"
+										dir="ltr"
+										flexShrink={0}
+										transition="all 0.25s ease"
+										_hover={{
+											boxShadow: "0 0 16px var(--rb-panel-accent-glow)",
+											transform: "scale(1.04)",
+										}}
+										sx={{ fontVariantNumeric: "tabular-nums" }}
+									>
+										{formatBytes(systemData.admin_overview.top_admin_usage || 0)}
+									</Flex>
+								</Flex>
+							</Box>
+						</Stack>
+					</SectionCard>
+				)}
+			</SimpleGrid>
 
 			<HistoryModal
 				isOpen={Boolean(historyPayload)}

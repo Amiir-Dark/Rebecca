@@ -44,6 +44,7 @@ type SubscriptionRenderRequest struct {
 	UserAgent  string
 	Accept     string
 	URL        string
+	HWID       string
 	Start      string
 	End        string
 	ReadOnly   bool
@@ -137,6 +138,23 @@ func (s Service) RenderSubscription(ctx context.Context, req SubscriptionRenderR
 	}
 	if !req.ReadOnly {
 		_ = s.repo.updateSubscriptionAccess(ctx, user.ID, req.UserAgent)
+	}
+
+	// Record device HWID whenever provided by client
+	effectiveLimitType := strings.ToLower(strings.TrimSpace(user.DeviceLimitType))
+	if req.HWID != "" && !req.ReadOnly {
+		limit := int64(0)
+		if effectiveLimitType == "hwid" {
+			limit = user.IPLimit
+		}
+		allowed, err := s.repo.RecordUserHWID(ctx, user.ID, req.HWID, req.UserAgent, limit)
+		if err == nil && !allowed && effectiveLimitType == "hwid" && limit > 0 {
+			return SubscriptionHTTPResponse{
+				Status:    403,
+				MediaType: "text/plain; charset=utf-8",
+				Body:      []byte("Device limit exceeded (سقف تعداد دستگاه‌های مجاز تکمیل شده است)"),
+			}, nil
+		}
 	}
 	if req.ClientType == "openvpn" {
 		if placeholderRemark != "" {
@@ -1119,14 +1137,43 @@ func selectSubscriptionClientType(userAgent string, settings SubscriptionSetting
 }
 
 func subscriptionHeaders(user UserDetail, req SubscriptionRenderRequest, settings SubscriptionSettings) map[string]string {
-	return map[string]string{
+	headers := map[string]string{
 		"content-disposition":     `attachment; filename="` + user.Username + `"`,
 		"profile-web-page-url":    req.URL,
 		"support-url":             strings.TrimSpace(settings.SubscriptionSupportURL),
 		"profile-title":           "base64:" + base64.StdEncoding.EncodeToString([]byte(firstNonEmptyString(settings.SubscriptionProfileTitle, "Subscription"))),
 		"profile-update-interval": firstNonEmptyString(settings.SubscriptionUpdateInterval, "12"),
 		"subscription-userinfo":   fmt.Sprintf("upload=0; download=%d; total=%d; expire=%d", user.UsedTraffic, int64OrZero(user.DataLimit), int64OrZero(user.Expire)),
+		"announce":                "0",
+		"subscription-always-hwid-enable": "1",
 	}
+
+	if ann := strings.TrimSpace(settings.SubscriptionAnnouncement); ann != "" {
+		if len(ann) > 200 {
+			ann = ann[:200]
+		}
+		headers["sub-info-text"] = ann
+		if color := strings.TrimSpace(settings.HappSubInfoColor); color != "" {
+			headers["sub-info-color"] = color
+		}
+		if btnText := strings.TrimSpace(settings.HappSubInfoButtonText); btnText != "" {
+			headers["sub-info-button-text"] = btnText
+		}
+		if btnLink := strings.TrimSpace(settings.HappSubInfoButtonLink); btnLink != "" {
+			headers["sub-info-button-link"] = btnLink
+		}
+	} else {
+		headers["sub-info-text"] = "0"
+	}
+	if settings.HappSubExpire {
+		headers["sub-expire"] = "1"
+		if link := strings.TrimSpace(settings.HappSubExpireButtonLink); link != "" {
+			headers["sub-expire-button-link"] = link
+		}
+	} else {
+		headers["sub-expire"] = "0"
+	}
+	return headers
 }
 
 func (s Service) renderSubscriptionHTML(ctx context.Context, user UserDetail, req SubscriptionRenderRequest, settings SubscriptionSettings) (string, error) {

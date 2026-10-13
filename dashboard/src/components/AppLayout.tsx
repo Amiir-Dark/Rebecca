@@ -79,14 +79,11 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { logout as logoutSession } from "service/auth";
 import { AdminRole, AdminSection, AdminSudoScope } from "types/Admin";
 import { clearClientSession } from "utils/session";
-import { getSponsors, type SponsorAsset } from "service/sponsors";
 import { ReactComponent as ImperialIranFlag } from "../assets/imperial-iran-flag.svg";
 import { AppSidebar } from "./AppSidebar";
-import { GitHubStars } from "./GitHubStars";
 import { HeaderCalendar } from "./HeaderCalendar";
 import { NotificationBell } from "./NotificationBell";
 import ThemeSelector from "./ThemeSelector";
-import { SponsorCarousel } from "./SponsorCarousel";
 
 const iconProps = {
 	baseStyle: {
@@ -147,41 +144,6 @@ export function AppLayout() {
 	const settingsMenu = useDisclosure();
 	const { t, i18n } = useTranslation();
 	const { userData, getUserIsSuccess } = useGetUser();
-	const canSeeSponsors =
-		getUserIsSuccess &&
-		(userData.role === AdminRole.FullAccess || userData.role === AdminRole.Sudo);
-	const sponsorsQuery = useQuery("sponsors", getSponsors, {
-		staleTime: 5 * 60 * 1000,
-		cacheTime: 30 * 60 * 1000,
-		retry: false,
-		enabled: canSeeSponsors,
-	});
-	const sponsorData = canSeeSponsors ? sponsorsQuery.data : undefined;
-	const sponsorHeaderItems = (sponsorData?.header ?? []).slice(0, 3).map(
-		(asset: SponsorAsset) => ({
-			id: asset.id,
-			src: asset.image_url,
-			alt: asset.alt || asset.label || "Sponsor",
-			href: asset.target_url,
-			label: asset.label,
-			isSponsor: true,
-		}),
-	);
-	const sponsorHeaderMobileItems = (sponsorData?.header_mobile ?? [])
-		.slice(0, 3)
-		.map((asset: SponsorAsset) => ({
-			id: asset.id,
-			src: asset.image_url,
-			alt: asset.alt || asset.label || "Sponsor",
-			href: asset.target_url,
-			label: asset.label,
-			isSponsor: true,
-		}));
-	const sponsorSidebarLogoItems = (sponsorData?.sidebar_logo ?? []).slice(0, 5);
-	const sponsorSidebarBanners = (sponsorData?.sidebar ?? []).slice(0, 5);
-	const mobileHeaderItems = sponsorHeaderMobileItems.length > 0
-		? sponsorHeaderMobileItems
-		: sponsorHeaderItems;
 	const navigate = useNavigate();
 	const location = useLocation();
 	const [activeLocationHash, setActiveLocationHash] = useState(
@@ -365,14 +327,6 @@ export function AppLayout() {
 						icon: XraySettingsIcon,
 					}
 				: null,
-			isPrivilegedAdmin
-				? {
-						key: "haproxy",
-						label: t("haproxy.title"),
-						to: "/haproxy",
-						icon: HAProxyIcon,
-					}
-				: null,
 			isPrivilegedAdmin && sectionAccess?.[AdminSection.Xray]
 				? {
 						key: "access-insights",
@@ -397,22 +351,6 @@ export function AppLayout() {
 						icon: PHPMyAdminIcon,
 					}
 				: null,
-			isPrivilegedAdmin
-				? {
-						key: "external-apps",
-						label: t("externalApps.menu"),
-						to: "/external-apps",
-						icon: ExternalAppsIcon,
-					}
-				: null,
-			isPrivilegedAdmin
-				? {
-						key: "api-docs",
-						label: t("apiDocs.menu"),
-						to: "/api-docs",
-						icon: DocsIcon,
-					}
-				: null,
 			canManagePlaceholders
 				? {
 						key: "placeholders",
@@ -423,12 +361,6 @@ export function AppLayout() {
 						icon: PlaceholderIcon,
 					}
 				: null,
-			{
-				key: "tutorials",
-				label: t("tutorials.menu"),
-				to: tutorialsUrl,
-				icon: TutorialIcon,
-			},
 		];
 		return items.filter(Boolean) as SettingsMenuItem[];
 	}, [
@@ -864,6 +796,17 @@ export function AppLayout() {
 		navigate(target);
 	};
 
+	const handleLogout = async () => {
+		try {
+			await logoutSession();
+		} catch (error) {
+			console.error("Logout request failed:", error);
+		} finally {
+			clearClientSession();
+			navigate("/login", { replace: true });
+		}
+	};
+
 	return (
 		<>
 			<Box display="none" aria-hidden="true">
@@ -888,8 +831,6 @@ export function AppLayout() {
 				{!isMobile ? (
 					<AppSidebar
 						collapsed={sidebarCollapsed}
-						sponsors={sponsorSidebarLogoItems}
-						sidebarBanners={sponsorSidebarBanners}
 						onRequestExpand={() => setSidebarCollapsed(false)}
 					/>
 				) : null}
@@ -990,32 +931,6 @@ export function AppLayout() {
 									</Text>
 								)}
 							</HStack>
-							{mobileHeaderItems.length > 0 && (
-								<Box
-									w={{ base: "160px", sm: "220px", md: "360px" }}
-									minW="0"
-									flexShrink={1}
-									display={{ base: "block", md: "none" }}
-								>
-									<SponsorCarousel
-										items={mobileHeaderItems}
-										variant="banner"
-									/>
-								</Box>
-							)}
-							{sponsorHeaderItems.length > 0 && (
-								<Box
-									w={{ base: "160px", sm: "220px", md: "360px" }}
-									minW="0"
-									flexShrink={1}
-									display={{ base: "none", md: "block" }}
-								>
-									<SponsorCarousel
-										items={sponsorHeaderItems}
-										variant="banner"
-									/>
-								</Box>
-							)}
 						</HStack>
 						<HStack spacing={2} alignItems="center" flexShrink={0}>
 							<HStack
@@ -1029,7 +944,6 @@ export function AppLayout() {
 							>
 								<HeaderCalendar />
 								{getUserIsSuccess && userData.username && <NotificationBell />}
-								<GitHubStars />
 							</HStack>
 
 							{/* User Menu */}
@@ -1047,16 +961,14 @@ export function AppLayout() {
 										as={Button}
 										variant="outline"
 										h="34px"
-										minW="34px"
 										borderRadius="full"
-										pl={1}
-										pr={{ base: 1, sm: 3 }}
+										px={2}
 										aria-label={t("a11y.userMenu")}
 										fontSize="sm"
 										fontWeight="semibold"
 										bg={headerButtonBg}
 										borderColor={shellBorder}
-										_hover={{ bg: headerButtonHoverBg }}
+										_hover={{ bg: headerButtonHoverBg, borderColor: "var(--rb-panel-accent)" }}
 										onClick={() => {
 											if (userMenu.isOpen) {
 												handleUserMenuClose();
@@ -1065,26 +977,27 @@ export function AppLayout() {
 											}
 										}}
 									>
-										<HStack spacing={2}>
+										<HStack spacing={1.5}>
 											<Flex
-												w="24px"
-												h="24px"
+												w="22px"
+												h="22px"
 												flexShrink={0}
 												align="center"
 												justify="center"
 												borderRadius="full"
-												bg={primaryTint}
-												color="primary.500"
-												_dark={{ color: "primary.300" }}
+												bg="var(--rb-panel-accent-soft)"
+												color="var(--rb-panel-accent)"
 											>
-												<PersonIcon w="3.5" h="3.5" />
+												<PersonIcon w="3" h="3" />
 											</Flex>
 											<Text
-												display={{ base: "none", sm: "inline" }}
-												maxW={{ base: "100px", sm: "130px" }}
+												fontSize="12px"
+												fontWeight="700"
+												color="panel.text"
+												maxW={{ base: "85px", sm: "130px" }}
 												isTruncated
 											>
-												{userData.username}
+												{userData.username || "admin"}
 											</Text>
 										</HStack>
 									</MenuButton>
@@ -1286,14 +1199,7 @@ export function AppLayout() {
 													bg: "transparent !important",
 												},
 											}}
-											onClick={async () => {
-												try {
-													await logoutSession();
-												} finally {
-													clearClientSession();
-													navigate("/login");
-												}
-											}}
+											onClick={handleLogout}
 										>
 											{t("header.logout")}
 										</MenuItem>
@@ -1328,8 +1234,6 @@ export function AppLayout() {
 							<DrawerBody p={0}>
 								<AppSidebar
 									collapsed={false}
-									sponsors={sponsorSidebarLogoItems}
-									sidebarBanners={sponsorSidebarBanners}
 									inDrawer
 									onRequestExpand={sidebarDrawer.onClose}
 								/>
@@ -1735,13 +1639,8 @@ export function AppLayout() {
 																	_focus={{ bg: "transparent" }}
 																	_focusVisible={{ bg: menuHover }}
 																	onClick={async () => {
-																		try {
-																			await logoutSession();
-																		} finally {
-																			clearClientSession();
-																			handleAccountMenuClose();
-																			navigate("/login");
-																		}
+																		handleAccountMenuClose();
+																		await handleLogout();
 																	}}
 																>
 																	{t("header.logout")}

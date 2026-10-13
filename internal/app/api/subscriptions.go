@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	userapp "github.com/rebeccapanel/rebecca/internal/app/user"
 )
@@ -26,11 +27,44 @@ func (s *Server) handleSubscriptionPath(w http.ResponseWriter, r *http.Request) 
 	s.handleResolvedSubscription(w, r, req)
 }
 
+func extractHWID(r *http.Request) string {
+	hwid := r.Header.Get("X-HWID")
+	if hwid == "" {
+		hwid = r.Header.Get("HWID")
+	}
+	if hwid == "" {
+		hwid = r.Header.Get("X-Device-Id")
+	}
+	if hwid == "" {
+		hwid = r.Header.Get("Device-Id")
+	}
+	if hwid == "" {
+		for k, vals := range r.Header {
+			lk := strings.ToLower(k)
+			if (lk == "x-hwid" || lk == "hwid" || lk == "x-device-id" || lk == "device-id") && len(vals) > 0 {
+				hwid = vals[0]
+				break
+			}
+		}
+	}
+	if hwid == "" {
+		hwid = r.URL.Query().Get("hwid")
+	}
+	if hwid == "" {
+		hwid = r.URL.Query().Get("HWID")
+	}
+	if hwid == "" {
+		hwid = r.URL.Query().Get("device_id")
+	}
+	return strings.TrimSpace(hwid)
+}
+
 func (s *Server) handleResolvedSubscription(w http.ResponseWriter, r *http.Request, req userapp.SubscriptionRenderRequest) {
 	setSubscriptionNoCacheHeaders(w)
 	req.UserAgent = r.Header.Get("User-Agent")
 	req.Accept = r.Header.Get("Accept")
 	req.URL = requestAbsoluteURL(r)
+	req.HWID = extractHWID(r)
 	req.Start = r.URL.Query().Get("start")
 	req.End = r.URL.Query().Get("end")
 	req.ReadOnly = s.cfg.SubscriptionReadOnly
@@ -45,6 +79,15 @@ func (s *Server) handleResolvedSubscription(w http.ResponseWriter, r *http.Reque
 		if err != nil {
 			writeSubscriptionError(w, err)
 			return
+		}
+		if req.HWID != "" && !req.ReadOnly {
+			if u, ok := user["user"].(userapp.UserDetail); ok {
+				limit := int64(0)
+				if strings.EqualFold(u.DeviceLimitType, "hwid") {
+					limit = u.IPLimit
+				}
+				_, _ = s.userService.RecordUserHWID(r.Context(), u.ID, req.HWID, req.UserAgent, limit)
+			}
 		}
 		writeJSON(w, http.StatusOK, user)
 	case "usage":
@@ -85,6 +128,7 @@ func setSubscriptionNoCacheHeaders(w http.ResponseWriter) {
 	w.Header().Set("Cloudflare-CDN-Cache-Control", "no-store")
 	w.Header().Set("Expires", "0")
 	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Subscription-Always-Hwid-Enable", "1")
 }
 
 func writeSubscriptionError(w http.ResponseWriter, err error) {

@@ -40,17 +40,20 @@ describe("notifications page", () => {
 		expect(markup).toContain("notifications.tabs.inbox");
 		expect(markup).not.toContain("notifications.tabs.send");
 		expect(markup).not.toContain("notifications.tabs.rules");
+		expect(markup).not.toContain("notifications.tabs.happAnnouncement");
 	});
 
 	it("adds sending for sudo admins without automatic rules", () => {
 		const markup = render(AdminRole.Sudo);
 		expect(markup).toContain("notifications.tabs.send");
 		expect(markup).not.toContain("notifications.tabs.rules");
+		expect(markup).toContain("notifications.tabs.happAnnouncement");
 	});
 
 	it("shows sending and automatic rules to full access admins", () => {
 		const markup = render(AdminRole.FullAccess);
 		expect(markup).toContain("notifications.tabs.send");
 		expect(markup).toContain("notifications.tabs.rules");
+		expect(markup).toContain("notifications.tabs.happAnnouncement");
 	});
 });

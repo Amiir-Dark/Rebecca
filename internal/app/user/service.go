@@ -371,3 +371,15 @@ func normalizeUserNumericStringFields(raw []byte, fields map[string]json.RawMess
 func rawIsNull(raw json.RawMessage) bool {
 	return strings.EqualFold(strings.TrimSpace(string(raw)), "null")
 }
+
+func (s Service) GetUserHWIDs(ctx context.Context, userID int64) ([]UserHWIDRecord, error) {
+	return s.repo.GetUserHWIDs(ctx, userID)
+}
+
+func (s Service) ResetUserHWIDs(ctx context.Context, userID int64) error {
+	return s.repo.ResetUserHWIDs(ctx, userID)
+}
+
+func (s Service) RecordUserHWID(ctx context.Context, userID int64, hwid string, userAgent string, maxLimit int64) (bool, error) {
+	return s.repo.RecordUserHWID(ctx, userID, hwid, userAgent, maxLimit)
+}

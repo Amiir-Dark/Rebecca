@@ -63,6 +63,7 @@ export type User = {
 	expire: number | null;
 	data_limit: number | null;
 	ip_limit: number | null;
+	device_limit_type?: "ip" | "hwid";
 	data_limit_reset_strategy: DataLimitResetStrategy;
 	on_hold_expire_duration: number | null;
 	lifetime_used_traffic: number;
@@ -86,6 +87,15 @@ export type User = {
 	next_plans: NextPlan[];
 };
 
+export type UserHWID = {
+	id: number;
+	user_id: number;
+	hwid: string;
+	user_agent: string;
+	last_seen_at: string;
+	created_at: string;
+};
+
 export type UserListItem = {
 	id: number;
 	username: string;
@@ -95,9 +105,11 @@ export type UserListItem = {
 	created_at: string;
 	expire: number | null;
 	data_limit: number | null;
+	ip_limit?: number | null;
 	data_limit_reset_strategy: DataLimitResetStrategy | null;
 	online_at?: string | null;
 	is_online: boolean;
+	device_limit_type?: "ip" | "hwid";
 	upload_speed?: number;
 	download_speed?: number;
 	service_id: number | null;
@@ -114,6 +126,7 @@ export type UserCreate = Pick<
 	| "expire"
 	| "data_limit"
 	| "ip_limit"
+	| "device_limit_type"
 	| "data_limit_reset_strategy"
 	| "on_hold_expire_duration"
 	| "username"
@@ -136,6 +149,7 @@ export type UserCreateWithService = Pick<
 	| "expire"
 	| "data_limit"
 	| "ip_limit"
+	| "device_limit_type"
 	| "data_limit_reset_strategy"
 	| "on_hold_expire_duration"
 	| "note"

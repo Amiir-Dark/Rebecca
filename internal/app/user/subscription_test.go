@@ -2535,3 +2535,39 @@ func TestSubscriptionTokenAcceptsLegacyPythonAndRecentGoSignatures(t *testing.T)
 		t.Fatalf("new tokens must use legacy python-compatible signatures: %s", generated)
 	}
 }
+
+func TestHappAnnouncementHeaders(t *testing.T) {
+	user := UserDetail{Username: "bob", UsedTraffic: 1024}
+	req := SubscriptionRenderRequest{URL: "https://example.com/sub/bob"}
+	settings := SubscriptionSettings{
+		SubscriptionAnnouncement: "Happ the best!",
+		HappSubInfoColor:         "blue",
+		HappSubInfoButtonText:    "Support",
+		HappSubInfoButtonLink:    "https://t.me/happ_chat",
+		HappSubExpire:            true,
+		HappSubExpireButtonLink:  "https://t.me/renew",
+	}
+	headers := subscriptionHeaders(user, req, settings)
+	if headers["announce"] != "0" {
+		t.Fatalf("expected announce '0', got %q", headers["announce"])
+	}
+	if headers["sub-info-text"] != "Happ the best!" {
+		t.Fatalf("expected sub-info-text %q, got %q", "Happ the best!", headers["sub-info-text"])
+	}
+	if headers["sub-info-color"] != "blue" {
+		t.Fatalf("expected sub-info-color 'blue', got %q", headers["sub-info-color"])
+	}
+	if headers["sub-info-button-text"] != "Support" {
+		t.Fatalf("expected sub-info-button-text 'Support', got %q", headers["sub-info-button-text"])
+	}
+	if headers["sub-info-button-link"] != "https://t.me/happ_chat" {
+		t.Fatalf("expected sub-info-button-link, got %q", headers["sub-info-button-link"])
+	}
+	if headers["sub-expire"] != "1" {
+		t.Fatalf("expected sub-expire '1', got %q", headers["sub-expire"])
+	}
+	if headers["sub-expire-button-link"] != "https://t.me/renew" {
+		t.Fatalf("expected sub-expire-button-link, got %q", headers["sub-expire-button-link"])
+	}
+}
+

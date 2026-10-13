@@ -614,21 +614,51 @@ export const DashboardMaintenanceControls = ({
 			</HStack>
 
 			{!isStandardAdminOnly && (
-				<Stack
+				<Flex
 					display={{ base: "flex", sm: "none" }}
-					spacing={2}
+					gap={1.5}
 					w="full"
+					align="center"
+					justify="stretch"
 				>
-					<Box w="full">
-						{renderUpdatePopover()}
-					</Box>
+					{canMaintain && (
+						<Box flex="1 1 0" minW={0} sx={{ "& > button, & .chakra-popover__trigger": { w: "full !important", px: "2 !important", fontSize: "11px !important" } }}>
+							{renderUpdatePopover()}
+						</Box>
+					)}
 
-					<Flex gap={2} w="full" align="center">
+					{canBackUp && (
+						<Box
+							flex="1 1 0"
+							minW={0}
+							sx={{
+								"& > button": {
+									w: "full !important",
+									h: "32px !important",
+									borderRadius: "full !important",
+									fontSize: "11px !important",
+									fontWeight: "600 !important",
+									borderColor: "panel.border !important",
+									color: "panel.text !important",
+									whiteSpace: "nowrap !important",
+									px: "2 !important",
+								},
+							}}
+						>
+							<DashboardBackupControls
+								isBinaryRuntime={hostActionsAvailable}
+								runtimeLoading={info.isLoading}
+							/>
+						</Box>
+					)}
+
+					{canMaintain && (
 						<Button
-							flex="1 1 50%"
+							flex="1 1 0"
+							minW={0}
 							h="32px"
 							size="xs"
-							px={3}
+							px={2}
 							colorScheme="red"
 							variant="outline"
 							borderColor="panel.border"
@@ -640,41 +670,17 @@ export const DashboardMaintenanceControls = ({
 							isDisabled={info.isLoading || !hostActionsAvailable}
 							whiteSpace="nowrap"
 						>
-							<HStack spacing={1.5} align="center" justify="center" w="full">
+							<HStack spacing={1} align="center" justify="center" w="full">
 								<Box as="span" display="inline-flex" alignItems="center" justifyContent="center" flexShrink={0}>
-									<ArrowsRightLeftIcon width={15} height={15} />
+									<ArrowsRightLeftIcon width={13} height={13} />
 								</Box>
-								<Text as="span" fontSize="12px" fontWeight="600" lineHeight="none">
+								<Text as="span" fontSize="11px" fontWeight="600" lineHeight="none" noOfLines={1}>
 									{t("dashboard.maintenance.restartAction")}
 								</Text>
 							</HStack>
 						</Button>
-
-						{canBackUp && (
-							<Box
-								flex="1 1 50%"
-								minW={0}
-								sx={{
-									"& > button": {
-										w: "full",
-										h: "32px !important",
-										borderRadius: "full !important",
-										fontSize: "12px !important",
-										fontWeight: "600 !important",
-										borderColor: "panel.border !important",
-										color: "panel.text !important",
-										whiteSpace: "nowrap !important",
-									},
-								}}
-							>
-								<DashboardBackupControls
-									isBinaryRuntime={hostActionsAvailable}
-									runtimeLoading={info.isLoading}
-								/>
-							</Box>
-						)}
-					</Flex>
-				</Stack>
+					)}
+				</Flex>
 			)}
 
 			<Modal

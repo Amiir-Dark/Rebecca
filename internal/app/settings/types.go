@@ -68,6 +68,15 @@ type SubscriptionSettings struct {
 	ClientRoutingRules             []ClientRoutingRule `json:"client_routing_rules"`
 	SubscriptionPlaceholderEnabled bool                `json:"subscription_placeholder_enabled"`
 	SubscriptionPlaceholderRemark  string              `json:"subscription_placeholder_remark"`
+	SubscriptionAnnouncement       string              `json:"subscription_announcement"`
+	HappSubInfoColor               string              `json:"happ_sub_info_color"`
+	HappSubInfoButtonText          string              `json:"happ_sub_info_button_text"`
+	HappSubInfoButtonLink          string              `json:"happ_sub_info_button_link"`
+	HappSubExpire                  bool                `json:"happ_sub_expire"`
+	HappSubExpireButtonLink        string              `json:"happ_sub_expire_button_link"`
+	HappAnnouncementTargetType     string              `json:"happ_announcement_target_type"`
+	HappAnnouncementTargetUsers    string              `json:"happ_announcement_target_users"`
+	DefaultDeviceLimitType         string              `json:"default_device_limit_type"`
 }
 
 type SubscriptionSettingsUpdate struct {
@@ -93,6 +102,15 @@ type SubscriptionSettingsUpdate struct {
 	ClientRoutingRules             *[]ClientRoutingRule `json:"client_routing_rules,omitempty"`
 	SubscriptionPlaceholderEnabled *bool                `json:"subscription_placeholder_enabled,omitempty"`
 	SubscriptionPlaceholderRemark  *string              `json:"subscription_placeholder_remark,omitempty"`
+	SubscriptionAnnouncement       *string              `json:"subscription_announcement,omitempty"`
+	HappSubInfoColor               *string              `json:"happ_sub_info_color,omitempty"`
+	HappSubInfoButtonText          *string              `json:"happ_sub_info_button_text,omitempty"`
+	HappSubInfoButtonLink          *string              `json:"happ_sub_info_button_link,omitempty"`
+	HappSubExpire                  *bool                `json:"happ_sub_expire,omitempty"`
+	HappSubExpireButtonLink        *string              `json:"happ_sub_expire_button_link,omitempty"`
+	HappAnnouncementTargetType     *string              `json:"happ_announcement_target_type,omitempty"`
+	HappAnnouncementTargetUsers    *string              `json:"happ_announcement_target_users,omitempty"`
+	DefaultDeviceLimitType         *string              `json:"default_device_limit_type,omitempty"`
 }
 
 type AdminSubscriptionSettings struct {

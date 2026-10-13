@@ -8,6 +8,7 @@ import {
 	PopoverBody,
 	PopoverContent,
 	PopoverTrigger,
+	Portal,
 	Stack,
 	Text,
 } from "@chakra-ui/react";
@@ -48,87 +49,119 @@ export const NotificationBell = () => {
 	};
 
 	return (
-		<Popover placement="bottom-end" isLazy>
+		<Popover placement="bottom-end" isLazy gutter={10}>
 			<PopoverTrigger>
-				<Box position="relative" display="inline-flex">
-					<IconButton
-						aria-label={t("notifications.bell.label")}
-						icon={<BellIcon width={18} height={18} />}
-						size="sm"
-						variant="ghost"
-						borderRadius="full"
-					/>
-					{unread > 0 && (
-						<Badge
-							position="absolute"
-							top="-1"
-							right="-1"
-							colorScheme="red"
-							borderRadius="full"
-							fontSize="2xs"
-							px={1.5}
-						>
-							{unread > 99 ? "99+" : unread}
-						</Badge>
-					)}
-				</Box>
-			</PopoverTrigger>
-			<PopoverContent w="340px" maxH="420px" overflowY="auto">
-				<PopoverBody>
-					<HStack justify="space-between" mb={2}>
-						<Text fontWeight="semibold">{t("notifications.bell.label")}</Text>
-						{unread > 0 && (
-							<Button
-								size="xs"
-								variant="ghost"
-								onClick={() => markAll.mutate()}
-								isLoading={markAll.isLoading}
-							>
-								{t("notifications.inbox.markAllRead")}
-							</Button>
-						)}
-					</HStack>
-					{items.length === 0 ? (
-						<Text fontSize="sm" color="gray.500">
-							{t("notifications.bell.empty")}
-						</Text>
-					) : (
-						<Stack spacing={2}>
-							{items.map((item) => (
-								<Box
-									key={item.id}
-									as="button"
-									textAlign="start"
-									p={2}
-									borderRadius="md"
-									borderWidth="1px"
-									opacity={item.read_at === null ? 1 : 0.7}
-									onClick={() => openItem(item)}
+				<IconButton
+					position="relative"
+					aria-label={t("notifications.bell.label")}
+					icon={
+						<Box position="relative" display="inline-flex" alignItems="center" justifyContent="center">
+							<BellIcon width={18} height={18} />
+							{unread > 0 && (
+								<Badge
+									position="absolute"
+									top="-6px"
+									right="-8px"
+									colorScheme="red"
+									borderRadius="full"
+									fontSize="9px"
+									px={1}
+									lineHeight="1.2"
 								>
-									<Text fontSize="sm" fontWeight="semibold" noOfLines={1}>
-										{item.title}
-									</Text>
-									<Text fontSize="xs" noOfLines={2}>
-										{item.body}
-									</Text>
-									<Text fontSize="2xs" color="gray.500">
-										{dayjs.unix(item.created_at).format("YYYY-MM-DD HH:mm")}
-									</Text>
-								</Box>
-							))}
-						</Stack>
-					)}
-					<Button
-						mt={3}
-						size="sm"
-						w="full"
-						variant="outline"
-						onClick={() => navigate("/notifications")}
-					>
-						{t("notifications.bell.viewAll")}
-					</Button>
-				</PopoverBody>
-			</PopoverContent>
+									{unread > 99 ? "99+" : unread}
+								</Badge>
+							)}
+						</Box>
+					}
+					size="sm"
+					variant="ghost"
+					borderRadius="full"
+					w="32px"
+					h="32px"
+					minW="32px"
+					_hover={{ bg: "panel.elevated" }}
+				/>
+			</PopoverTrigger>
+			<Portal>
+				<PopoverContent
+					w={{ base: "calc(100vw - 32px)", sm: "340px" }}
+					maxW="340px"
+					maxH="420px"
+					overflowY="auto"
+					bg="panel.surface"
+					borderColor="panel.border"
+					borderWidth="1px"
+					borderRadius="16px"
+					boxShadow="0 20px 48px -10px rgba(0, 0, 0, 0.5)"
+					zIndex={2500}
+				>
+					<PopoverBody p={3}>
+						<HStack justify="space-between" mb={2.5}>
+							<Text fontWeight="700" fontSize="14px" color="panel.text">
+								{t("notifications.bell.label")}
+							</Text>
+							{unread > 0 && (
+								<Button
+									size="xs"
+									variant="ghost"
+									color="var(--rb-panel-accent)"
+									onClick={() => markAll.mutate()}
+									isLoading={markAll.isLoading}
+								>
+									{t("notifications.inbox.markAllRead")}
+								</Button>
+							)}
+						</HStack>
+						{items.length === 0 ? (
+							<Text fontSize="sm" color="panel.textMuted" py={4} textAlign="center">
+								{t("notifications.bell.empty")}
+							</Text>
+						) : (
+							<Stack spacing={2}>
+								{items.map((item) => (
+									<Box
+										key={item.id}
+										as="button"
+										textAlign="start"
+										p={2.5}
+										borderRadius="10px"
+										bg={item.read_at === null ? "panel.elevated" : "transparent"}
+										borderColor="panel.border"
+										borderWidth="1px"
+										opacity={item.read_at === null ? 1 : 0.75}
+										transition="all 0.2s ease"
+										_hover={{ bg: "panel.elevated", borderColor: "var(--rb-panel-accent)" }}
+										onClick={() => openItem(item)}
+									>
+										<Text fontSize="13px" fontWeight="700" color="panel.text" noOfLines={1}>
+											{item.title}
+										</Text>
+										<Text fontSize="11px" color="panel.textSecondary" noOfLines={2} mt={0.5}>
+											{item.body}
+										</Text>
+										<Text fontSize="10px" color="panel.textMuted" mt={1}>
+											{dayjs.unix(item.created_at).format("YYYY-MM-DD HH:mm")}
+										</Text>
+									</Box>
+								))}
+							</Stack>
+						)}
+						<Button
+							mt={3}
+							size="sm"
+							w="full"
+							variant="outline"
+							borderColor="panel.border"
+							color="panel.text"
+							_hover={{ bg: "panel.elevated", borderColor: "var(--rb-panel-accent)" }}
+							borderRadius="10px"
+							onClick={() => navigate("/notifications")}
+						>
+							{t("notifications.bell.viewAll")}
+						</Button>
+					</PopoverBody>
+				</PopoverContent>
+			</Portal>
 		</Popover>
 	);
 };
