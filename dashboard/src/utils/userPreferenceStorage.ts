@@ -69,3 +69,32 @@ export const setNodesPerPageLimitSize = (value: string) => {
 	writePerPage(NUM_NODES_PER_PAGE_LOCAL_STORAGE_KEY, value);
 	writeCookie(NUM_NODES_PER_PAGE_COOKIE_KEY, value);
 };
+
+const HOSTS_CUSTOM_ORDER_KEY = "rebecca-hosts-custom-order";
+
+export const getHostsCustomOrder = (): Record<string, number> => {
+	try {
+		const raw = localStorage.getItem(HOSTS_CUSTOM_ORDER_KEY);
+		if (!raw) return {};
+		const parsed = JSON.parse(raw);
+		return typeof parsed === "object" && parsed !== null ? parsed : {};
+	} catch {
+		return {};
+	}
+};
+
+export const setHostsCustomOrder = (order: Record<string, number>) => {
+	try {
+		localStorage.setItem(HOSTS_CUSTOM_ORDER_KEY, JSON.stringify(order));
+	} catch (e) {
+		console.error("Failed to save hosts custom order:", e);
+	}
+};
+
+export const clearHostsCustomOrder = () => {
+	try {
+		localStorage.removeItem(HOSTS_CUSTOM_ORDER_KEY);
+	} catch (e) {
+		console.error("Failed to clear hosts custom order:", e);
+	}
+};
