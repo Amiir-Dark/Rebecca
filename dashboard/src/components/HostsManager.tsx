@@ -16,6 +16,7 @@ import {
 	FormHelperText,
 	FormLabel,
 	HStack,
+	IconButton,
 	Input,
 	InputGroup,
 	InputRightElement,
@@ -30,6 +31,7 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 	Portal,
+	Select,
 	SimpleGrid,
 	Spinner,
 	Stack,
@@ -46,14 +48,23 @@ import {
 	VStack,
 } from "@chakra-ui/react";
 import {
+	ArrowDownIcon,
 	ArrowPathIcon,
+	ArrowUpIcon,
 	CheckCircleIcon,
+	ChevronDownIcon,
+	ChevronUpIcon,
 	InformationCircleIcon,
 	PencilIcon,
 	PlusIcon,
 	TrashIcon,
 	XCircleIcon,
 } from "@heroicons/react/24/outline";
+import {
+	clearHostsCustomOrder,
+	getHostsCustomOrder,
+	setHostsCustomOrder,
+} from "utils/userPreferenceStorage";
 import {
 	proxyALPN,
 	proxyFingerprint,
@@ -834,15 +845,31 @@ const formatHostForApi = (
 	};
 };
 
-const sortHosts = (hosts: HostState[]) =>
-	[...hosts].sort((a, b) => {
+const getHostOrderKey = (host: HostState): string => {
+	if (host.data.id != null) return `id:${host.data.id}`;
+	return `uid:${host.uid}`;
+};
+
+const sortHosts = (hosts: HostState[], orderMap?: Record<string, number>) => {
+	const activeOrder = orderMap ?? getHostsCustomOrder();
+	return [...hosts].sort((a, b) => {
 		const inboundDiff = a.inboundTag.localeCompare(b.inboundTag);
 		if (inboundDiff !== 0) return inboundDiff;
+		const orderA = activeOrder[getHostOrderKey(a)];
+		const orderB = activeOrder[getHostOrderKey(b)];
+		if (orderA !== undefined && orderB !== undefined) {
+			if (orderA !== orderB) return orderA - orderB;
+		} else if (orderA !== undefined) {
+			return -1;
+		} else if (orderB !== undefined) {
+			return 1;
+		}
 		const leftID = a.data.id ?? Number.MAX_SAFE_INTEGER;
 		const rightID = b.data.id ?? Number.MAX_SAFE_INTEGER;
 		if (leftID !== rightID) return leftID - rightID;
 		return a.data.remark.localeCompare(b.data.remark);
 	});
+};
 
 const mapHostsToState = (hosts: HostsSchema): HostState[] => {
 	const result: HostState[] = [];
@@ -1988,6 +2015,10 @@ export const HostsManager: FC = () => {
 	const [createOpen, setCreateOpen] = useState(false);
 	const [savingHostUid, setSavingHostUid] = useState<string | null>(null);
 	const [deletingUid, setDeletingUid] = useState<string | null>(null);
+	const [customOrder, setCustomOrder] = useState<Record<string, number>>(() =>
+		getHostsCustomOrder(),
+	);
+	const [selectedInboundFilter, setSelectedInboundFilter] = useState<string>("all");
 	const [bulkAction, setBulkAction] = useState<
 		"enable" | "disable" | "delete" | null
 	>(null);
@@ -2075,17 +2106,23 @@ export const HostsManager: FC = () => {
 		return options.sort((a, b) => a.label.localeCompare(b.label));
 	}, [inbounds]);
 
+	const allHosts = useMemo(
+		() => sortHosts(_hostItemsState, customOrder),
+		[_hostItemsState, customOrder],
+	);
+
 	const activeHosts = useMemo(
-		() => sortHosts(_hostItemsState.filter((host) => !host.data.is_disabled)),
-		[_hostItemsState],
+		() => allHosts.filter((host) => !host.data.is_disabled),
+		[allHosts],
 	);
 
-	const allHosts = useMemo(() => sortHosts(_hostItemsState), [_hostItemsState]);
-
-	const baseFilteredHosts = useMemo(
-		() => (includeDisabled ? allHosts : activeHosts),
-		[activeHosts, allHosts, includeDisabled],
-	);
+	const baseFilteredHosts = useMemo(() => {
+		const source = includeDisabled ? allHosts : activeHosts;
+		if (selectedInboundFilter === "all") {
+			return source;
+		}
+		return source.filter((host) => host.inboundTag === selectedInboundFilter);
+	}, [activeHosts, allHosts, includeDisabled, selectedInboundFilter]);
 
 	const filteredHosts = useMemo(() => {
 		if (!searchQuery.trim()) {
@@ -2121,6 +2158,91 @@ export const HostsManager: FC = () => {
 		? (hostItemsRef.current.find((host) => host.uid === selectedHostUid) ??
 			null)
 		: null;
+
+	const getInboundPeers = useCallback(
+		(targetHost: HostState) =>
+			sortHosts(
+				_hostItemsState.filter((h) => h.inboundTag === targetHost.inboundTag),
+				customOrder,
+			),
+		[_hostItemsState, customOrder],
+	);
+
+	const handleMoveHost = useCallback(
+		(targetHost: HostState, direction: -1 | 1) => {
+			const peers = getInboundPeers(targetHost);
+			const idx = peers.findIndex((h) => h.uid === targetHost.uid);
+			if (idx === -1) return;
+			const targetIdx = idx + direction;
+			if (targetIdx < 0 || targetIdx >= peers.length) return;
+
+			const nextPeers = [...peers];
+			const temp = nextPeers[idx];
+			nextPeers[idx] = nextPeers[targetIdx];
+			nextPeers[targetIdx] = temp;
+
+			const nextOrder = { ...customOrder };
+			nextPeers.forEach((h, index) => {
+				nextOrder[getHostOrderKey(h)] = index;
+			});
+
+			setHostsCustomOrder(nextOrder);
+			setCustomOrder(nextOrder);
+			applyHostItems((prev) => sortHosts(prev, nextOrder));
+			toast({
+				title: t("hostsPage.orderUpdated"),
+				status: "success",
+				duration: 2000,
+				isClosable: true,
+				position: "top",
+			});
+		},
+		[applyHostItems, customOrder, getInboundPeers, t, toast],
+	);
+
+	const handleMoveHostToEdge = useCallback(
+		(targetHost: HostState, edge: "top" | "bottom") => {
+			const peers = getInboundPeers(targetHost);
+			const idx = peers.findIndex((h) => h.uid === targetHost.uid);
+			if (idx === -1) return;
+			if (edge === "top" && idx === 0) return;
+			if (edge === "bottom" && idx === peers.length - 1) return;
+
+			const filtered = peers.filter((h) => h.uid !== targetHost.uid);
+			const nextPeers =
+				edge === "top" ? [targetHost, ...filtered] : [...filtered, targetHost];
+
+			const nextOrder = { ...customOrder };
+			nextPeers.forEach((h, index) => {
+				nextOrder[getHostOrderKey(h)] = index;
+			});
+
+			setHostsCustomOrder(nextOrder);
+			setCustomOrder(nextOrder);
+			applyHostItems((prev) => sortHosts(prev, nextOrder));
+			toast({
+				title: t("hostsPage.orderUpdated"),
+				status: "success",
+				duration: 2000,
+				isClosable: true,
+				position: "top",
+			});
+		},
+		[applyHostItems, customOrder, getInboundPeers, t, toast],
+	);
+
+	const handleResetOrder = useCallback(() => {
+		clearHostsCustomOrder();
+		setCustomOrder({});
+		applyHostItems((prev) => sortHosts(prev, {}));
+		toast({
+			title: t("hostsPage.orderReset"),
+			status: "info",
+			duration: 2000,
+			isClosable: true,
+			position: "top",
+		});
+	}, [applyHostItems, t, toast]);
 
 	const updateHost = <Key extends keyof HostData>(
 		uid: string,
@@ -2628,6 +2750,63 @@ export const HostsManager: FC = () => {
 	const hostColumns = useMemo<DataTableColumn<HostState>[]>(
 		() => [
 			{
+				id: "order",
+				header: t("hostsPage.order"),
+				priority: "high",
+				width: "95px",
+				minWidth: "90px",
+				maxWidth: "110px",
+				mobilePriority: 1,
+				mobileMetaLabel: t("hostsPage.order"),
+				cell: (host) => {
+					const peers = getInboundPeers(host);
+					const idx = peers.findIndex((h) => h.uid === host.uid);
+					const isFirst = idx <= 0;
+					const isLast = idx === -1 || idx >= peers.length - 1;
+					return (
+						<HStack spacing={1} align="center">
+							<Badge
+								colorScheme="purple"
+								variant="subtle"
+								fontSize="11px"
+								px={1.5}
+								py={0.5}
+								borderRadius="md"
+								fontWeight="bold"
+							>
+								#{idx >= 0 ? idx + 1 : "-"}
+							</Badge>
+							<HStack spacing={0.5}>
+								<IconButton
+									aria-label={t("hostsPage.moveUp")}
+									title={t("hostsPage.moveUp")}
+									icon={<ChevronUpIcon width={14} height={14} />}
+									size="xs"
+									variant="ghost"
+									isDisabled={isFirst}
+									onClick={(e) => {
+										e.stopPropagation();
+										handleMoveHost(host, -1);
+									}}
+								/>
+								<IconButton
+									aria-label={t("hostsPage.moveDown")}
+									title={t("hostsPage.moveDown")}
+									icon={<ChevronDownIcon width={14} height={14} />}
+									size="xs"
+									variant="ghost"
+									isDisabled={isLast}
+									onClick={(e) => {
+										e.stopPropagation();
+										handleMoveHost(host, 1);
+									}}
+								/>
+							</HStack>
+						</HStack>
+					);
+				},
+			},
+			{
 				id: "remark",
 				header: t("hostsPage.host"),
 				isPrimary: true,
@@ -2795,17 +2974,49 @@ export const HostsManager: FC = () => {
 				),
 			},
 		],
-		[inboundOptions, renderRotationValues, t],
+		[getInboundPeers, handleMoveHost, inboundOptions, renderRotationValues, t],
 	);
 
 	const hostRowActions = (host: HostState): DataTableRowAction<HostState>[] => {
 		const isActive = !host.data.is_disabled;
+		const peers = getInboundPeers(host);
+		const idx = peers.findIndex((h) => h.uid === host.uid);
+		const isFirst = idx <= 0;
+		const isLast = idx === -1 || idx >= peers.length - 1;
 		return [
 			{
 				id: "edit",
 				label: t("edit"),
 				icon: <EditIcon />,
 				onClick: () => setSelectedHostUid(host.uid),
+			},
+			{
+				id: "moveUp",
+				label: t("hostsPage.moveUp"),
+				icon: <ArrowUpIcon width={16} />,
+				onClick: () => handleMoveHost(host, -1),
+				isDisabled: isFirst,
+			},
+			{
+				id: "moveDown",
+				label: t("hostsPage.moveDown"),
+				icon: <ArrowDownIcon width={16} />,
+				onClick: () => handleMoveHost(host, 1),
+				isDisabled: isLast,
+			},
+			{
+				id: "moveToTop",
+				label: t("hostsPage.moveToTop"),
+				icon: <ChevronUpIcon width={16} />,
+				onClick: () => handleMoveHostToEdge(host, "top"),
+				isDisabled: isFirst,
+			},
+			{
+				id: "moveToBottom",
+				label: t("hostsPage.moveToBottom"),
+				icon: <ChevronDownIcon width={16} />,
+				onClick: () => handleMoveHostToEdge(host, "bottom"),
+				isDisabled: isLast,
 			},
 			{
 				id: "toggle",
@@ -2877,7 +3088,7 @@ export const HostsManager: FC = () => {
 			>
 				<Stack
 					direction={{ base: "column", sm: "row" }}
-					spacing={2}
+					spacing={3}
 					align={{ base: "stretch", sm: "center" }}
 					flexWrap="wrap"
 				>
@@ -2885,16 +3096,49 @@ export const HostsManager: FC = () => {
 						value={searchQuery}
 						onChange={(event) => setSearchQuery(event.target.value)}
 						placeholder={t("hostsPage.searchPlaceholder")}
-						containerProps={{ w: { base: "full", md: "320px" } }}
+						containerProps={{ w: { base: "full", md: "280px" } }}
 						matchOptions={searchMatch}
 						onMatchOptionsChange={setSearchMatch}
 					/>
+					<Select
+						aria-label={t("hostsPage.inboundFilter")}
+						value={selectedInboundFilter}
+						onChange={(event) => setSelectedInboundFilter(event.target.value)}
+						w={{ base: "full", md: "240px" }}
+						size="sm"
+						borderRadius="md"
+					>
+						<option value="all">
+							{t("hostsPage.allInbounds")} ({_hostItemsState.length})
+						</option>
+						{inboundOptions.map((opt) => {
+							const count = _hostItemsState.filter(
+								(h) => h.inboundTag === opt.value,
+							).length;
+							return (
+								<option key={opt.value} value={opt.value}>
+									{opt.value} ({count})
+								</option>
+							);
+						})}
+					</Select>
 					<Checkbox
 						isChecked={includeDisabled}
 						onChange={(event) => setIncludeDisabled(event.target.checked)}
 					>
 						{t("hostsPage.showDisabled")}
 					</Checkbox>
+					{Object.keys(customOrder).length > 0 && (
+						<Button
+							size="xs"
+							variant="outline"
+							colorScheme="gray"
+							onClick={handleResetOrder}
+							ml={{ base: 0, sm: "auto" }}
+						>
+							{t("hostsPage.resetOrder")}
+						</Button>
+					)}
 				</Stack>
 			</ResourceListCard>
 
